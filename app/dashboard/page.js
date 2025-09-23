@@ -80,13 +80,13 @@ export default function DashboardPage() {
       }));
       setWorkouts(workoutsData);
 
-      // Fetch programs
-      const programsSnapshot = await getDocs(collection(db, 'programs'));
-      const programsData = programsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setPrograms(programsData);
+      // Fetch programs (commented out as programs state is not used)
+      // const programsSnapshot = await getDocs(collection(db, 'programs'));
+      // const programsData = programsSnapshot.docs.map(doc => ({
+      //   id: doc.id,
+      //   ...doc.data()
+      // }));
+      // setPrograms(programsData);
 
       // Calculate stats
       calculateStats(workoutsData);
