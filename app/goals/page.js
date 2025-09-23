@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -23,7 +23,6 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   EmojiEvents as TrophyIcon,
-  TrendingUp as TrendingUpIcon,
   Edit as EditIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -63,9 +62,9 @@ export default function GoalsPage() {
 
   useEffect(() => {
     fetchGoals();
-  }, []);
+  }, [fetchGoals]);
 
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'goals'));
       const goalsData = [];
@@ -77,7 +76,7 @@ export default function GoalsPage() {
       console.error('Error fetching goals:', error);
       showSnackbar('Error fetching goals', 'error');
     }
-  };
+  }, []);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });

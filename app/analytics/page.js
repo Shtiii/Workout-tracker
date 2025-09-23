@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -17,7 +17,7 @@ import {
   MenuItem,
   CircularProgress
 } from '@mui/material';
-import { CalendarMonth as CalendarIcon, TrendingUp as TrendingUpIcon } from '@mui/icons-material';
+// import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -91,7 +91,7 @@ export default function AnalyticsPage() {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    // const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
 

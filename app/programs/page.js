@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   AppBar,
@@ -57,9 +57,9 @@ export default function ProgramsPage() {
 
   useEffect(() => {
     fetchPrograms();
-  }, []);
+  }, [fetchPrograms]);
 
-  const fetchPrograms = async () => {
+  const fetchPrograms = useCallback(async () => {
     try {
       console.log('Fetching programs...');
       const querySnapshot = await getDocs(collection(db, 'programs'));
@@ -73,7 +73,7 @@ export default function ProgramsPage() {
       console.error('Error fetching programs:', error);
       showSnackbar('Error fetching programs: ' + error.message, 'error');
     }
-  };
+  }, []);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });

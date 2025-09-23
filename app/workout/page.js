@@ -28,8 +28,6 @@ import {
   Pause as PauseIcon,
   Stop as StopIcon,
   Delete as DeleteIcon,
-  Timer as TimerIcon,
-  FitnessCenter as FitnessCenterIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc } from 'firebase/firestore';

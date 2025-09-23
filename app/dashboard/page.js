@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Container,
@@ -9,34 +9,30 @@ import {
   Grid,
   Card,
   CardContent,
-  Tabs,
-  Tab,
   Button,
   Paper,
-  LinearProgress,
-  Chip,
   IconButton
 } from '@mui/material';
 import {
   FitnessCenter as FitnessCenterIcon,
-  Timer as TimerIcon,
   EmojiEvents as TrophyIcon,
   TrendingUp as TrendingUpIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   Stop as StopIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, addDoc, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(0);
+  // const [activeTab, setActiveTab] = useState(0);
   const [workouts, setWorkouts] = useState([]);
-  const [programs, setPrograms] = useState([]);
-  const [goals, setGoals] = useState([]);
+  // const [programs, setPrograms] = useState([]);
+  // const [goals, setGoals] = useState([]);
   const [records, setRecords] = useState({});
   const [stats, setStats] = useState({
     totalWorkouts: 0,
@@ -52,7 +48,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   useEffect(() => {
     let interval = null;
@@ -69,7 +65,7 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [timer.isRunning, timer.startTime]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch workouts
       const workoutsQuery = query(
@@ -98,7 +94,19 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error fetching data:', error);
     }
-  };
+  }, []);
+
+  const deleteWorkout = useCallback(async (workoutId) => {
+    if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+      try {
+        await deleteDoc(doc(db, 'workoutSessions', workoutId));
+        // Refresh data after deletion
+        fetchData();
+      } catch (error) {
+        console.error('Error deleting workout:', error);
+      }
+    }
+  }, [fetchData]);
 
   const calculateStats = (workoutsData) => {
     const totalWorkouts = workoutsData.length;
@@ -272,7 +280,7 @@ export default function DashboardPage() {
   StatCard.displayName = 'StatCard';
 
   // Memoized WorkoutCard component
-  const WorkoutCard = memo(({ workout }) => (
+  const WorkoutCard = memo(({ workout, onDelete }) => (
     <motion.div
       whileHover={{ x: 3 }}
       transition={{ duration: 0.2 }}
@@ -308,16 +316,26 @@ export default function DashboardPage() {
             >
               {workout.programName || 'Workout'}
             </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                fontSize: { xs: '0.7rem', sm: '0.75rem' },
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {workout.completedAt?.toLocaleDateString()}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {workout.completedAt?.toLocaleDateString()}
+              </Typography>
+              <IconButton
+                onClick={() => onDelete(workout.id)}
+                color="error"
+                size="small"
+                sx={{ opacity: 0.7, '&:hover': { opacity: 1 } }}
+              >
+                <DeleteIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
           </Box>
           <Box sx={{ mb: 2 }}>
             {workout.exercises?.slice(0, 3).map((exercise, index) => (
@@ -540,8 +558,8 @@ export default function DashboardPage() {
           </Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} md={8}>
-              {workouts.slice(0, 5).map((workout, index) => (
-                <WorkoutCard key={workout.id} workout={workout} />
+              {workouts.slice(0, 5).map((workout) => (
+                <WorkoutCard key={workout.id} workout={workout} onDelete={deleteWorkout} />
               ))}
               {workouts.length === 0 && (
                 <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
