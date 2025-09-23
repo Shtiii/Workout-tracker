@@ -28,7 +28,7 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, orderBy, query, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, deleteDoc, doc, setDoc, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const modalStyle = {
@@ -67,6 +67,7 @@ export default function DashboardPage() {
     isRunning: false,
     startTime: null
   });
+  const [workoutTemplates, setWorkoutTemplates] = useState([]);
 
   const fetchWeeklyGoal = useCallback(async () => {
     try {
@@ -111,10 +112,108 @@ export default function DashboardPage() {
       // Calculate stats
       calculateStats(workoutsData);
       calculateRecords(workoutsData);
+      generateWorkoutTemplates(workoutsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
   }, [fetchWeeklyGoal]);
+
+  const generateWorkoutTemplates = (workoutsData) => {
+    // Create templates from recent workouts
+    const recentWorkouts = workoutsData.slice(0, 5);
+    const templates = [];
+
+    // Group by program name
+    const programGroups = {};
+    recentWorkouts.forEach(workout => {
+      const key = workout.programName || 'Custom Workout';
+      if (!programGroups[key]) {
+        programGroups[key] = [];
+      }
+      programGroups[key].push(workout);
+    });
+
+    // Create templates for each program type
+    Object.entries(programGroups).forEach(([programName, workouts]) => {
+      const mostRecent = workouts[0];
+      if (mostRecent.exercises && mostRecent.exercises.length > 0) {
+        templates.push({
+          name: `🔥 ${programName}`,
+          description: `Based on your recent ${programName.toLowerCase()} workout`,
+          exercises: mostRecent.exercises.map(ex => ({
+            name: ex.name,
+            targetSets: ex.targetSets || 3,
+            targetReps: ex.targetReps || 10
+          })),
+          lastUsed: mostRecent.completedAt,
+          workoutCount: workouts.length
+        });
+      }
+    });
+
+    // Add quick templates for common workout types
+    if (templates.length < 3) {
+      templates.push(
+        {
+          name: '💪 Push Day',
+          description: 'Chest, shoulders, and triceps workout',
+          exercises: [
+            { name: 'Bench Press', targetSets: 4, targetReps: 8 },
+            { name: 'Overhead Press', targetSets: 3, targetReps: 10 },
+            { name: 'Incline Dumbbell Press', targetSets: 3, targetReps: 12 },
+            { name: 'Lateral Raises', targetSets: 3, targetReps: 15 },
+            { name: 'Tricep Extensions', targetSets: 3, targetReps: 12 }
+          ]
+        },
+        {
+          name: '🏋️ Pull Day',
+          description: 'Back and biceps workout',
+          exercises: [
+            { name: 'Deadlift', targetSets: 4, targetReps: 6 },
+            { name: 'Pull-ups', targetSets: 3, targetReps: 8 },
+            { name: 'Barbell Row', targetSets: 3, targetReps: 10 },
+            { name: 'Lat Pulldown', targetSets: 3, targetReps: 12 },
+            { name: 'Bicep Curls', targetSets: 3, targetReps: 12 }
+          ]
+        },
+        {
+          name: '🦵 Leg Day',
+          description: 'Lower body strength workout',
+          exercises: [
+            { name: 'Squat', targetSets: 4, targetReps: 8 },
+            { name: 'Romanian Deadlift', targetSets: 3, targetReps: 10 },
+            { name: 'Leg Press', targetSets: 3, targetReps: 15 },
+            { name: 'Leg Curls', targetSets: 3, targetReps: 12 },
+            { name: 'Calf Raises', targetSets: 3, targetReps: 20 }
+          ]
+        }
+      );
+    }
+
+    setWorkoutTemplates(templates.slice(0, 4)); // Show max 4 templates
+  };
+
+  const startTemplateWorkout = async (template) => {
+    try {
+      // Create a new program in Firebase based on the template
+      const programData = {
+        name: template.name,
+        exercises: template.exercises,
+        createdAt: new Date(),
+        isTemplate: true
+      };
+
+      const programRef = await addDoc(collection(db, 'programs'), programData);
+
+      // Redirect to workout page with the new program
+      router.push(`/workout?programId=${programRef.id}&template=true`);
+    } catch (error) {
+      console.error('Error creating template workout:', error);
+      // Fallback: redirect to workout page with template data in URL
+      const exercisesParam = encodeURIComponent(JSON.stringify(template.exercises));
+      router.push(`/workout?template=${template.name}&exercises=${exercisesParam}`);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -147,7 +246,7 @@ export default function DashboardPage() {
     }
   }, [fetchData]);
 
-  const calculateStats = (workoutsData) => {
+  const calculateStats = useCallback((workoutsData) => {
     const totalWorkouts = workoutsData.length;
     const currentStreak = calculateStreak(workoutsData);
     const weeklyGoal = calculateWeeklyProgress(workoutsData);
@@ -162,7 +261,7 @@ export default function DashboardPage() {
     // Calculate achievements
     const userAchievements = calculateAchievements(workoutsData);
     setAchievements(userAchievements);
-  };
+  }, []);
 
   const calculateStreak = (workoutsData) => {
     if (workoutsData.length === 0) return 0;
@@ -628,6 +727,76 @@ export default function DashboardPage() {
             />
           </Grid>
         </Grid>
+
+        {/* Quick Workout Templates */}
+        {workoutTemplates.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mb: 3
+            }}
+          >
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+              ⚡ QUICK START WORKOUTS
+            </Typography>
+            <Grid container spacing={2}>
+              {workoutTemplates.map((template, index) => (
+                <Grid item xs={12} sm={6} md={3} key={index}>
+                  <motion.div
+                    whileHover={{ y: -3, scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Card
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                        border: '1px solid #333',
+                        cursor: 'pointer',
+                        height: '100%',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: '0 0 20px rgba(255, 68, 68, 0.3)'
+                        },
+                        transition: 'all 0.3s'
+                      }}
+                      onClick={() => startTemplateWorkout(template)}
+                    >
+                      <CardContent sx={{ p: 2.5, textAlign: 'center' }}>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 700,
+                            mb: 1,
+                            fontSize: { xs: '1rem', sm: '1.1rem' }
+                          }}
+                        >
+                          {template.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 2, fontSize: '0.85rem' }}
+                        >
+                          {template.description}
+                        </Typography>
+                        <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                          {template.exercises.length} exercises
+                        </Typography>
+                        {template.workoutCount && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                            Used {template.workoutCount} times
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
 
         {/* Current Streak Highlight */}
         {stats.currentStreak > 0 && (

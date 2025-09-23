@@ -231,8 +231,8 @@ export default function AnalyticsPage() {
 
     // Return top 4 exercises with most data points
     return Object.entries(exerciseData)
-      .filter(([_, data]) => data.length >= 2)
-      .sort(([_, a], [__, b]) => b.length - a.length)
+      .filter(([, data]) => data.length >= 2)
+      .sort(([, a], [, b]) => b.length - a.length)
       .slice(0, 4)
       .map(([name, data]) => ({
         name,
@@ -404,7 +404,7 @@ export default function AnalyticsPage() {
               📈 STRENGTH PROGRESSION
             </Typography>
             <Grid container spacing={3}>
-              {chartData.map((exercise, index) => (
+              {chartData.map((exercise) => (
                 <Grid item xs={12} md={6} key={exercise.name}>
                   <Box
                     sx={{

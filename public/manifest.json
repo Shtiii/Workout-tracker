@@ -1,7 +1,7 @@
 {
-  "name": "Workout Tracker",
-  "short_name": "WorkoutTracker",
-  "description": "Track your workouts, monitor progress, and achieve your fitness goals",
+  "name": "Shtii Planner",
+  "short_name": "ShtiiPlanner",
+  "description": "Your personal workout tracker with smart features, goal tracking, and offline support",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#1a1a1a",
@@ -29,14 +29,28 @@
       "short_name": "Train",
       "description": "Begin a new workout session",
       "url": "/workout",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "View Goals",
+      "short_name": "Goals",
+      "description": "Check and set your fitness goals",
+      "url": "/goals",
+      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
     },
     {
       "name": "View Analytics",
       "short_name": "Analytics",
       "description": "Check your progress and statistics",
       "url": "/analytics",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Programs",
+      "short_name": "Programs",
+      "description": "Manage your workout programs",
+      "url": "/programs",
+      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
     }
   ]
 }

@@ -14,7 +14,8 @@
       "Bash(where magick)",
       "Bash(start generate-icons.html)",
       "Bash(node:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []
