@@ -47,10 +47,6 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
     let interval = null;
     if (timer.isRunning) {
       interval = setInterval(() => {
@@ -95,6 +91,10 @@ export default function DashboardPage() {
       console.error('Error fetching data:', error);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const deleteWorkout = useCallback(async (workoutId) => {
     if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
