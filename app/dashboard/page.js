@@ -269,6 +269,8 @@ export default function DashboardPage() {
     </motion.div>
   ));
 
+  StatCard.displayName = 'StatCard';
+
   // Memoized WorkoutCard component
   const WorkoutCard = memo(({ workout }) => (
     <motion.div
@@ -338,7 +340,9 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </motion.div>
-  );
+  ));
+
+  WorkoutCard.displayName = 'WorkoutCard';
 
   return (
     <Box
@@ -547,18 +551,38 @@ export default function DashboardPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                PERSONAL RECORDS 🏆
+                PERSONAL RECORDS 💪
               </Typography>
               {Object.entries(records).slice(0, 5).map(([exercise, weight]) => (
-                <Box key={exercise} sx={{ mb: 2, p: 2, border: '1px solid #333', borderRadius: 1 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{exercise}</Typography>
-                  <Typography variant="h6" color="primary.main">
-                    {weight} lbs
-                  </Typography>
-                </Box>
+                <motion.div
+                  key={exercise}
+                  whileHover={{ x: 3 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card
+                    sx={{
+                      background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                      border: '1px solid #333',
+                      mb: { xs: 1.5, sm: 2 },
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)'
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>
+                        {exercise}
+                      </Typography>
+                      <Typography variant="h6" color="primary.main">
+                        {weight} kg
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               ))}
               {Object.keys(records).length === 0 && (
-                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
                   No PRs yet. Start lifting heavy! 🏋️‍♂️
                 </Typography>
               )}

@@ -356,7 +356,7 @@ export default function GoalsPage() {
               letterSpacing: 2
             }}
           >
-            🎯 CONQUEST GOALS
+            🎯 GOALS
           </Typography>
           <Button
             variant="contained"
@@ -509,7 +509,7 @@ export default function GoalsPage() {
                 label="Unit"
                 value={newGoal.unit}
                 onChange={(e) => handleInputChange('unit', e.target.value)}
-                placeholder="lbs, reps, minutes..."
+                placeholder="kg, reps, minutes..."
                 required
                 sx={{
                   '& .MuiOutlinedInput-root': {

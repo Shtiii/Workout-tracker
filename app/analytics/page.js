@@ -178,15 +178,17 @@ export default function AnalyticsPage() {
           WORKOUT CALENDAR
         </Typography>
 
-        <Grid container sx={{ mb: 2 }}>
+        <Grid container sx={{ mb: 3 }}>
           {dayNames.map(day => (
-            <Grid item xs key={day} sx={{ textAlign: 'center' }}>
+            <Grid item xs key={day} sx={{ textAlign: 'center', p: 1 }}>
               <Typography
-                variant="caption"
+                variant="body2"
                 color="text.secondary"
                 sx={{
-                  fontWeight: 600,
-                  fontSize: { xs: '0.6rem', sm: '0.75rem' }
+                  fontWeight: 700,
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                  textTransform: 'uppercase',
+                  letterSpacing: 1
                 }}
               >
                 {day}
@@ -196,51 +198,100 @@ export default function AnalyticsPage() {
         </Grid>
 
         {calendar.map((week, weekIndex) => (
-          <Grid container key={weekIndex} sx={{ mb: { xs: 0.5, sm: 1 } }}>
+          <Grid container key={weekIndex} sx={{ mb: { xs: 1, sm: 1.5 } }}>
             {week.map((day, dayIndex) => (
-              <Grid item xs key={dayIndex} sx={{ p: { xs: 0.25, sm: 0.5 } }}>
-                <Box
-                  sx={{
-                    height: { xs: 35, sm: 40 },
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    backgroundColor: day.hasWorkout ? '#ff4444' : 'transparent',
-                    border: day.isToday ? '2px solid #ffaa00' : day.hasWorkout ? '1px solid #ff4444' : '1px solid #333',
-                    opacity: day.isCurrentMonth ? 1 : 0.3,
-                    '&:hover': {
-                      backgroundColor: day.hasWorkout ? '#ff6666' : '#333'
-                    },
-                    // Better touch targets on mobile
-                    minHeight: { xs: 35, sm: 40 },
-                    minWidth: { xs: 35, sm: 40 }
-                  }}
+              <Grid item xs key={dayIndex} sx={{ p: { xs: 0.5, sm: 0.75 } }}>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  <Typography
-                    variant="body2"
+                  <Box
                     sx={{
-                      color: day.hasWorkout ? '#000' : 'text.primary',
-                      fontWeight: day.isToday ? 700 : day.hasWorkout ? 600 : 400
+                      height: { xs: 45, sm: 50, md: 55 },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      backgroundColor: day.hasWorkout ? '#ff4444' : 'rgba(26, 26, 26, 0.5)',
+                      border: day.isToday ? '2px solid #ffaa00' : day.hasWorkout ? '1px solid #ff4444' : '1px solid #444',
+                      opacity: day.isCurrentMonth ? 1 : 0.4,
+                      position: 'relative',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        backgroundColor: day.hasWorkout ? '#ff6666' : 'rgba(255, 68, 68, 0.1)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: day.hasWorkout
+                          ? '0 4px 20px rgba(255, 68, 68, 0.4)'
+                          : '0 4px 15px rgba(255, 68, 68, 0.2)'
+                      },
+                      minHeight: { xs: 45, sm: 50, md: 55 },
+                      minWidth: { xs: 45, sm: 50, md: 55 }
                     }}
                   >
-                    {day.date}
-                  </Typography>
-                </Box>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: day.hasWorkout ? '#000' : 'text.primary',
+                        fontWeight: day.isToday ? 800 : day.hasWorkout ? 700 : 500,
+                        fontSize: { xs: '0.875rem', sm: '1rem' }
+                      }}
+                    >
+                      {day.date}
+                    </Typography>
+                    {day.hasWorkout && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          width: 6,
+                          height: 6,
+                          backgroundColor: '#000',
+                          borderRadius: '50%'
+                        }}
+                      />
+                    )}
+                  </Box>
+                </motion.div>
               </Grid>
             ))}
           </Grid>
         ))}
 
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 16, height: 16, backgroundColor: '#ff4444', borderRadius: 1 }} />
-            <Typography variant="caption">Workout Day</Typography>
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 20,
+              height: 20,
+              backgroundColor: '#ff4444',
+              borderRadius: 2,
+              position: 'relative'
+            }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  width: 4,
+                  height: 4,
+                  backgroundColor: '#000',
+                  borderRadius: '50%'
+                }}
+              />
+            </Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Workout Day</Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 16, height: 16, border: '2px solid #ffaa00', borderRadius: 1 }} />
-            <Typography variant="caption">Today</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 20,
+              height: 20,
+              border: '2px solid #ffaa00',
+              borderRadius: 2,
+              backgroundColor: 'rgba(26, 26, 26, 0.5)'
+            }} />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Today</Typography>
           </Box>
         </Box>
       </Paper>
@@ -362,7 +413,7 @@ export default function AnalyticsPage() {
                               WebkitTextFillColor: 'transparent'
                             }}
                           >
-                            {Math.max(...data.map(d => d.oneRepMax)).toFixed(1)} lbs
+                            {Math.max(...data.map(d => d.oneRepMax)).toFixed(1)} kg
                           </Typography>
                         </Box>
 
@@ -384,7 +435,7 @@ export default function AnalyticsPage() {
                               variant="body1"
                               sx={{ color: '#00ff88', fontWeight: 600 }}
                             >
-                              +{improvement.toFixed(1)} lbs ({improvementPercent}%)
+                              +{improvement.toFixed(1)} kg ({improvementPercent}%)
                             </Typography>
                           </Box>
                         )}

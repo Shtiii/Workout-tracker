@@ -272,7 +272,7 @@ export default function PersonalBestsPage() {
                             mb: 1
                           }}
                         >
-                          {best.weight} lbs
+                          {best.weight} kg
                         </Typography>
 
                         <Typography
