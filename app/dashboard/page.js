@@ -11,7 +11,11 @@ import {
   CardContent,
   Button,
   Paper,
-  IconButton
+  IconButton,
+  Modal,
+  TextField,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   FitnessCenter as FitnessCenterIcon,
@@ -24,8 +28,21 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, orderBy, query, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+const modalStyle = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: '#1a1a1a',
+  border: '2px solid #ff4444',
+  borderRadius: 2,
+  boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+  p: 4,
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -40,11 +57,30 @@ export default function DashboardPage() {
     weeklyGoal: '0/3',
     totalExercises: 0
   });
+  const [weeklyGoalTarget, setWeeklyGoalTarget] = useState(3);
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [newGoalTarget, setNewGoalTarget] = useState(3);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [achievements, setAchievements] = useState([]);
   const [timer, setTimer] = useState({
     time: 0,
     isRunning: false,
     startTime: null
   });
+
+  const fetchWeeklyGoal = useCallback(async () => {
+    try {
+      const goalDoc = await getDocs(query(collection(db, 'settings')));
+      const settings = goalDoc.docs.find(doc => doc.id === 'weeklyGoal');
+      if (settings) {
+        const target = settings.data().target || 3;
+        setWeeklyGoalTarget(target);
+        setNewGoalTarget(target);
+      }
+    } catch (error) {
+      console.error('Error fetching weekly goal:', error);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -69,13 +105,16 @@ export default function DashboardPage() {
       // }));
       // setPrograms(programsData);
 
+      // Fetch weekly goal target
+      await fetchWeeklyGoal();
+
       // Calculate stats
       calculateStats(workoutsData);
       calculateRecords(workoutsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
-  }, []);
+  }, [fetchWeeklyGoal]);
 
   useEffect(() => {
     fetchData();
@@ -119,6 +158,10 @@ export default function DashboardPage() {
       weeklyGoal,
       totalExercises: calculateUniqueExercises(workoutsData)
     });
+
+    // Calculate achievements
+    const userAchievements = calculateAchievements(workoutsData);
+    setAchievements(userAchievements);
   };
 
   const calculateStreak = (workoutsData) => {
@@ -153,7 +196,7 @@ export default function DashboardPage() {
       new Date(w.completedAt) >= weekStart
     ).length;
 
-    return `${weekWorkouts}/3`;
+    return `${weekWorkouts}/${weeklyGoalTarget}`;
   };
 
   const calculateUniqueExercises = (workoutsData) => {
@@ -213,8 +256,121 @@ export default function DashboardPage() {
     });
   };
 
+  const handleGoalModalOpen = () => {
+    setNewGoalTarget(weeklyGoalTarget);
+    setGoalModalOpen(true);
+  };
+
+  const handleGoalModalClose = () => {
+    setGoalModalOpen(false);
+    setNewGoalTarget(weeklyGoalTarget);
+  };
+
+  const saveWeeklyGoal = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'weeklyGoal'), {
+        target: parseInt(newGoalTarget),
+        updatedAt: new Date()
+      });
+
+      setWeeklyGoalTarget(parseInt(newGoalTarget));
+      setSnackbar({ open: true, message: 'Weekly goal updated! 🎯', severity: 'success' });
+      setGoalModalOpen(false);
+
+      // Recalculate stats with new goal
+      calculateStats(workouts);
+    } catch (error) {
+      console.error('Error saving weekly goal:', error);
+      setSnackbar({ open: true, message: 'Error saving goal', severity: 'error' });
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const calculateAchievements = useCallback((workoutsData) => {
+    const achievementsList = [];
+
+    // First Workout
+    if (workoutsData.length >= 1) {
+      achievementsList.push({
+        id: 'first_workout',
+        title: 'First Steps',
+        description: 'Completed your first workout',
+        icon: '🏃‍♂️',
+        earned: true,
+        date: workoutsData[workoutsData.length - 1]?.completedAt
+      });
+    }
+
+    // Workout Milestones
+    const milestones = [5, 10, 25, 50, 100];
+    milestones.forEach(milestone => {
+      if (workoutsData.length >= milestone) {
+        achievementsList.push({
+          id: `workouts_${milestone}`,
+          title: `${milestone} Workouts`,
+          description: `Completed ${milestone} total workouts`,
+          icon: milestone === 100 ? '💯' : milestone >= 50 ? '🏆' : milestone >= 25 ? '🥇' : milestone >= 10 ? '🥈' : '🥉',
+          earned: true,
+          date: workoutsData[workoutsData.length - milestone]?.completedAt
+        });
+      }
+    });
+
+    // Calculate current streak
+    const today = new Date();
+    let currentStreak = 0;
+    const sortedWorkouts = [...workoutsData].sort((a, b) => b.completedAt - a.completedAt);
+
+    for (let workout of sortedWorkouts) {
+      const workoutDate = new Date(workout.completedAt);
+      const daysDiff = Math.floor((today - workoutDate) / (1000 * 60 * 60 * 24));
+
+      if (daysDiff <= currentStreak + 1) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    // Streak Achievements
+    const streakMilestones = [3, 7, 14, 30];
+    streakMilestones.forEach(streak => {
+      if (currentStreak >= streak) {
+        achievementsList.push({
+          id: `streak_${streak}`,
+          title: `${streak} Day Streak`,
+          description: `Worked out for ${streak} consecutive days`,
+          icon: streak >= 30 ? '🔥🔥🔥' : streak >= 14 ? '🔥🔥' : '🔥',
+          earned: true,
+          date: new Date()
+        });
+      }
+    });
+
+    // Volume Achievements
+    const totalVolume = workoutsData.reduce((sum, workout) => sum + (workout.totalVolume || 0), 0);
+    const volumeMilestones = [1000, 5000, 10000, 25000, 50000];
+    volumeMilestones.forEach(volume => {
+      if (totalVolume >= volume) {
+        achievementsList.push({
+          id: `volume_${volume}`,
+          title: `${volume.toLocaleString()}kg Moved`,
+          description: `Lifted ${volume.toLocaleString()}kg total volume`,
+          icon: volume >= 50000 ? '💪💪💪' : volume >= 25000 ? '💪💪' : '💪',
+          earned: true,
+          date: new Date()
+        });
+      }
+    });
+
+    return achievementsList.sort((a, b) => b.date - a.date).slice(0, 6); // Latest 6 achievements
+  }, []);
+
   // Memoized StatCard component for better performance
-  const StatCard = memo(({ title, value, icon, gradient }) => (
+  const StatCard = memo(({ title, value, icon, gradient, onClick }) => (
     <motion.div
       whileHover={{ scale: 1.02, y: -2 }}
       transition={{ duration: 0.2 }}
@@ -225,13 +381,14 @@ export default function DashboardPage() {
           border: '1px solid rgba(255, 68, 68, 0.2)',
           position: 'relative',
           overflow: 'hidden',
-          cursor: 'pointer',
+          cursor: onClick ? 'pointer' : 'default',
           height: { xs: 120, sm: 140 }, // Fixed height for consistency
           '&:hover': {
             border: '1px solid #ff4444',
             boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
           }
         }}
+        onClick={onClick}
       >
         <CardContent sx={{
           textAlign: 'center',
@@ -459,6 +616,7 @@ export default function DashboardPage() {
               value={stats.weeklyGoal}
               icon={<TrophyIcon sx={{ fontSize: 40 }} />}
               gradient="rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05)"
+              onClick={handleGoalModalOpen}
             />
           </Grid>
           <Grid item xs={6} md={3}>
@@ -470,6 +628,40 @@ export default function DashboardPage() {
             />
           </Grid>
         </Grid>
+
+        {/* Current Streak Highlight */}
+        {stats.currentStreak > 0 && (
+          <Paper
+            sx={{
+              background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 170, 0, 0.1))',
+              border: '2px solid #ffaa00',
+              p: 3,
+              mb: 3,
+              textAlign: 'center'
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 1, color: '#ffaa00', fontWeight: 700 }}>
+              🔥 CURRENT STREAK
+            </Typography>
+            <Typography
+              variant="h2"
+              sx={{
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 1,
+                fontSize: { xs: '2.5rem', md: '3.5rem' }
+              }}
+            >
+              {stats.currentStreak} {stats.currentStreak === 1 ? 'Day' : 'Days'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Keep it up! You're building a strong fitness habit 💪
+            </Typography>
+          </Paper>
+        )}
 
         {/* Workout Timer */}
         <Paper
@@ -615,7 +807,147 @@ export default function DashboardPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* Achievements Section */}
+        {achievements.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mt: 3
+            }}
+          >
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+              🏆 ACHIEVEMENTS
+            </Typography>
+            <Grid container spacing={2}>
+              {achievements.map((achievement) => (
+                <Grid item xs={12} sm={6} md={4} key={achievement.id}>
+                  <motion.div
+                    whileHover={{ y: -2, scale: 1.02 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Card
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 215, 0, 0.1))',
+                        border: '2px solid #FFD700',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': {
+                          boxShadow: '0 0 30px rgba(255, 215, 0, 0.3)'
+                        },
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                        <Typography
+                          variant="h2"
+                          sx={{
+                            fontSize: '2.5rem',
+                            mb: 1
+                          }}
+                        >
+                          {achievement.icon}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 700,
+                            mb: 1,
+                            color: '#FFD700'
+                          }}
+                        >
+                          {achievement.title}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.8rem' }}
+                        >
+                          {achievement.description}
+                        </Typography>
+
+                        {/* Shine effect */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: 4,
+                            background: 'linear-gradient(90deg, #FFD700, #FFA500)',
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
       </Container>
+
+      {/* Weekly Goal Modal */}
+      <Modal open={goalModalOpen} onClose={handleGoalModalClose}>
+        <Box sx={modalStyle}>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+            Set Weekly Goal 🎯
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            How many workouts do you want to complete per week?
+          </Typography>
+
+          <TextField
+            fullWidth
+            label="Weekly Workout Target"
+            type="number"
+            value={newGoalTarget}
+            onChange={(e) => setNewGoalTarget(e.target.value)}
+            inputProps={{ min: 1, max: 14 }}
+            sx={{
+              mb: 3,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: '#0a0a0a',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main'
+                }
+              }
+            }}
+          />
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+            <Button onClick={handleGoalModalClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={saveWeeklyGoal}
+              disabled={!newGoalTarget || newGoalTarget < 1}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700
+              }}
+            >
+              Save Goal
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

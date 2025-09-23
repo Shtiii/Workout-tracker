@@ -17,6 +17,19 @@ export default function RootLayout({
   const pathname = usePathname();
   const router = useRouter();
 
+  // Register service worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    }
+  }, []);
+
   // Memoize navigation routes to prevent recreation on every render
   const navigationRoutes = useMemo(() => [
     { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
@@ -45,7 +58,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#ff4444" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <link rel="apple-touch-icon" href="/workout-icon-192.svg" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
         <ThemeRegistry>

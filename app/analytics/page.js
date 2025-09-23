@@ -21,6 +21,29 @@ import {
 import { motion } from 'framer-motion';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -91,9 +114,13 @@ export default function AnalyticsPage() {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const firstDay = new Date(currentYear, currentMonth, 1);
-    // const lastDay = new Date(currentYear, currentMonth + 1, 0);
+
+    // Calculate start date for Monday-based week
     const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    const dayOfWeek = firstDay.getDay();
+    // Adjust for Monday start: Sunday (0) becomes 6, Monday (1) becomes 0, etc.
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startDate.setDate(startDate.getDate() - daysFromMonday);
 
     const calendar = [];
     let week = [];
@@ -162,9 +189,60 @@ export default function AnalyticsPage() {
     return exerciseData;
   };
 
+  const getExerciseProgressCharts = () => {
+    const exerciseData = {};
+
+    const filteredWorkouts = workouts.filter(workout => {
+      if (selectedProgram !== 'all' && workout.programName !== selectedProgram) return false;
+      return true;
+    });
+
+    filteredWorkouts.forEach(workout => {
+      workout.exercises?.forEach(exercise => {
+        if (selectedExercise !== 'all' && exercise.name !== selectedExercise) return;
+
+        if (!exerciseData[exercise.name]) {
+          exerciseData[exercise.name] = [];
+        }
+
+        // Find the best set for this exercise in this workout
+        let bestWeight = 0;
+        exercise.sets?.forEach(set => {
+          const weight = parseFloat(set.weight);
+          if (weight && set.completed && weight > bestWeight) {
+            bestWeight = weight;
+          }
+        });
+
+        if (bestWeight > 0) {
+          exerciseData[exercise.name].push({
+            date: workout.completedAt.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
+            weight: bestWeight,
+            fullDate: workout.completedAt
+          });
+        }
+      });
+    });
+
+    // Sort by date and limit to top exercises
+    Object.keys(exerciseData).forEach(exercise => {
+      exerciseData[exercise].sort((a, b) => a.fullDate - b.fullDate);
+    });
+
+    // Return top 4 exercises with most data points
+    return Object.entries(exerciseData)
+      .filter(([_, data]) => data.length >= 2)
+      .sort(([_, a], [__, b]) => b.length - a.length)
+      .slice(0, 4)
+      .map(([name, data]) => ({
+        name,
+        data: data.slice(-10) // Last 10 data points
+      }));
+  };
+
   const CalendarView = () => {
     const calendar = getWorkoutCalendar();
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     return (
       <Paper
@@ -178,21 +256,29 @@ export default function AnalyticsPage() {
           WORKOUT CALENDAR
         </Typography>
 
-        <Grid container sx={{ mb: 3 }}>
+        <Grid container sx={{ mb: 2 }}>
           {dayNames.map(day => (
-            <Grid item xs key={day} sx={{ textAlign: 'center', p: 1 }}>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                  textTransform: 'uppercase',
-                  letterSpacing: 1
-                }}
-              >
-                {day}
-              </Typography>
+            <Grid item xs key={day} sx={{ p: { xs: 0.5, sm: 0.75 } }}>
+              <Box sx={{
+                textAlign: 'center',
+                height: { xs: 35, sm: 40 },
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                    textTransform: 'uppercase',
+                    letterSpacing: 1
+                  }}
+                >
+                  {day}
+                </Typography>
+              </Box>
             </Grid>
           ))}
         </Grid>
@@ -300,18 +386,115 @@ export default function AnalyticsPage() {
 
   const ProgressView = () => {
     const exerciseData = getProgressData();
+    const chartData = getExerciseProgressCharts();
 
     return (
-      <Paper
-        sx={{
-          background: '#1a1a1a',
-          border: '1px solid #333',
-          p: 3
-        }}
-      >
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
-          PROGRESS TRACKING
-        </Typography>
+      <Box>
+        {/* Progress Charts */}
+        {chartData.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mb: 3
+            }}
+          >
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+              📈 STRENGTH PROGRESSION
+            </Typography>
+            <Grid container spacing={3}>
+              {chartData.map((exercise, index) => (
+                <Grid item xs={12} md={6} key={exercise.name}>
+                  <Box
+                    sx={{
+                      p: 3,
+                      background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                      border: '1px solid #333',
+                      borderRadius: 2,
+                      height: 350
+                    }}
+                  >
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, textAlign: 'center' }}>
+                      {exercise.name}
+                    </Typography>
+                    <Box sx={{ height: 280 }}>
+                      <Line
+                        data={{
+                          labels: exercise.data.map(d => d.date),
+                          datasets: [
+                            {
+                              label: 'Max Weight (kg)',
+                              data: exercise.data.map(d => d.weight),
+                              borderColor: '#ff4444',
+                              backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                              borderWidth: 3,
+                              pointBackgroundColor: '#ff4444',
+                              pointBorderColor: '#ffffff',
+                              pointBorderWidth: 2,
+                              pointRadius: 6,
+                              tension: 0.4,
+                              fill: true
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              display: false
+                            },
+                            tooltip: {
+                              backgroundColor: '#1a1a1a',
+                              titleColor: '#fff',
+                              bodyColor: '#fff',
+                              borderColor: '#ff4444',
+                              borderWidth: 1
+                            }
+                          },
+                          scales: {
+                            x: {
+                              grid: {
+                                color: '#333'
+                              },
+                              ticks: {
+                                color: '#ccc',
+                                maxTicksLimit: 5
+                              }
+                            },
+                            y: {
+                              grid: {
+                                color: '#333'
+                              },
+                              ticks: {
+                                color: '#ccc',
+                                callback: function(value) {
+                                  return value + ' kg';
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
+
+        <Paper
+          sx={{
+            background: '#1a1a1a',
+            border: '1px solid #333',
+            p: 3
+          }}
+        >
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+            📊 DETAILED PROGRESS
+          </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} md={6}>
@@ -456,6 +639,7 @@ export default function AnalyticsPage() {
           )}
         </Box>
       </Paper>
+      </Box>
     );
   };
 
