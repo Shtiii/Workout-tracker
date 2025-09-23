@@ -1,7 +1,7 @@
 'use client';
 
 import type { Metadata } from "next";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Box, Paper, BottomNavigation, BottomNavigationAction } from '@mui/material';
 import { FitnessCenter as FitnessCenterIcon, ViewList as ViewListIcon, Analytics as AnalyticsIcon, EmojiEvents as EmojiEventsIcon, Dashboard as DashboardIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
@@ -18,29 +18,37 @@ export default function RootLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  const navigationRoutes = [
+  // Memoize navigation routes to prevent recreation on every render
+  const navigationRoutes = useMemo(() => [
     { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
     { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
     { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
     { path: '/analytics', label: 'Analytics', icon: <CalendarIcon /> },
     { path: '/goals', label: 'Goals', icon: <EmojiEventsIcon /> },
     { path: '/bests', label: 'PRs', icon: <EmojiEventsIcon /> }
-  ];
+  ], []);
 
   useEffect(() => {
     const currentIndex = navigationRoutes.findIndex(route => route.path === pathname);
     if (currentIndex !== -1) {
       setValue(currentIndex);
     }
-  }, [pathname]);
+  }, [pathname, navigationRoutes]);
 
-  const handleNavigation = (event: React.SyntheticEvent, newValue: number) => {
+  const handleNavigation = useCallback((event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
     router.push(navigationRoutes[newValue].path);
-  };
+  }, [router, navigationRoutes]);
 
   return (
     <html lang="en">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#ff4444" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+      </head>
       <body>
         <ThemeRegistry>
           <Box sx={{
@@ -51,14 +59,16 @@ export default function RootLayout({
           }}>
             <Box sx={{
               flex: 1,
-              pb: 7
+              pb: { xs: 8, sm: 7 }, // More padding on mobile for better spacing
+              px: { xs: 0, sm: 0 }, // Remove horizontal padding on mobile
+              overflowX: 'hidden' // Prevent horizontal scrolling
             }}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{
                   ease: 'easeIn',
-                  duration: 0.4
+                  duration: 0.3 // Slightly faster for better mobile feel
                 }}
               >
                 {children}
@@ -71,15 +81,30 @@ export default function RootLayout({
                 bottom: 0,
                 left: 0,
                 right: 0,
-                bgcolor: 'rgba(255, 255, 255, 0.05)'
+                bgcolor: 'rgba(26, 26, 26, 0.95)',
+                backdropFilter: 'blur(10px)',
+                borderTop: '1px solid #333',
+                // iPhone safe area handling
+                paddingBottom: 'env(safe-area-inset-bottom)',
+                zIndex: 1000
               }}
-              elevation={3}
+              elevation={8}
             >
               <BottomNavigation
                 value={value}
                 onChange={handleNavigation}
                 sx={{
-                  bgcolor: 'transparent'
+                  bgcolor: 'transparent',
+                  height: { xs: 64, sm: 56 }, // Taller on mobile for easier touch
+                  '& .MuiBottomNavigationAction-root': {
+                    minWidth: 'auto',
+                    padding: { xs: '6px 8px 8px', sm: '6px 12px 8px' },
+                    '& .MuiBottomNavigationAction-label': {
+                      fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                      fontWeight: 600,
+                      marginTop: '2px'
+                    }
+                  }
                 }}
               >
                 {navigationRoutes.map((route) => (

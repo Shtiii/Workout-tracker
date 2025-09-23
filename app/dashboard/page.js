@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Container,
@@ -205,9 +205,10 @@ export default function DashboardPage() {
     });
   };
 
-  const StatCard = ({ title, value, icon, gradient }) => (
+  // Memoized StatCard component for better performance
+  const StatCard = memo(({ title, value, icon, gradient }) => (
     <motion.div
-      whileHover={{ scale: 1.05, y: -5 }}
+      whileHover={{ scale: 1.02, y: -2 }}
       transition={{ duration: 0.2 }}
     >
       <Card
@@ -217,14 +218,23 @@ export default function DashboardPage() {
           position: 'relative',
           overflow: 'hidden',
           cursor: 'pointer',
+          height: { xs: 120, sm: 140 }, // Fixed height for consistency
           '&:hover': {
             border: '1px solid #ff4444',
             boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
           }
         }}
       >
-        <CardContent sx={{ textAlign: 'center', py: 3 }}>
-          <Box sx={{ mb: 2, color: 'primary.main' }}>
+        <CardContent sx={{
+          textAlign: 'center',
+          py: { xs: 2, sm: 3 },
+          px: { xs: 1.5, sm: 3 },
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
+        }}>
+          <Box sx={{ mb: { xs: 1, sm: 2 }, color: 'primary.main' }}>
             {icon}
           </Box>
           <Typography
@@ -235,7 +245,9 @@ export default function DashboardPage() {
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              mb: 1
+              mb: { xs: 0.5, sm: 1 },
+              fontSize: { xs: '1.5rem', sm: '2rem', md: '3rem' },
+              lineHeight: 1.2
             }}
           >
             {value}
@@ -246,7 +258,8 @@ export default function DashboardPage() {
               color: 'text.secondary',
               textTransform: 'uppercase',
               letterSpacing: 1,
-              fontWeight: 600
+              fontWeight: 600,
+              fontSize: { xs: '0.6rem', sm: '0.75rem' }
             }}
           >
             {title}
@@ -254,28 +267,53 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </motion.div>
-  );
+  ));
 
-  const WorkoutCard = ({ workout }) => (
+  // Memoized WorkoutCard component
+  const WorkoutCard = memo(({ workout }) => (
     <motion.div
-      whileHover={{ x: 5 }}
+      whileHover={{ x: 3 }}
       transition={{ duration: 0.2 }}
     >
       <Card
         sx={{
           background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
           border: '1px solid #333',
-          mb: 2,
+          mb: { xs: 1.5, sm: 2 },
           '&:hover': {
             borderColor: 'primary.main',
             boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)'
           }
         }}
       >
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">{workout.programName || 'Workout'}</Typography>
-            <Typography variant="caption" color="text.secondary">
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            mb: { xs: 1.5, sm: 2 },
+            flexWrap: 'wrap',
+            gap: 1
+          }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                fontWeight: 600,
+                flex: 1,
+                minWidth: 'fit-content'
+              }}
+            >
+              {workout.programName || 'Workout'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                whiteSpace: 'nowrap'
+              }}
+            >
               {workout.completedAt?.toLocaleDateString()}
             </Typography>
           </Box>
@@ -323,7 +361,14 @@ export default function DashboardPage() {
           backdropFilter: 'blur(10px)'
         }}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          px: { xs: 2, sm: 0 }
+        }}>
           <Typography
             variant="h4"
             sx={{
@@ -333,7 +378,9 @@ export default function DashboardPage() {
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               textTransform: 'uppercase',
-              letterSpacing: 2
+              letterSpacing: { xs: 1, sm: 2 },
+              fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' },
+              lineHeight: 1.2
             }}
           >
             SHTII PLANNER
@@ -346,17 +393,23 @@ export default function DashboardPage() {
               background: 'linear-gradient(135deg, #ff4444, #cc0000)',
               fontWeight: 700,
               textTransform: 'uppercase',
-              letterSpacing: 1
+              letterSpacing: 1,
+              minWidth: { xs: 'auto', sm: 120 },
+              px: { xs: 2, sm: 3 },
+              py: { xs: 1, sm: 1.5 },
+              fontSize: { xs: '0.8rem', sm: '0.875rem' }
             }}
           >
-            Quick Add
+            {/* Hide text on very small screens, show icon only */}
+            <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>Quick Add</Box>
+            <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>+</Box>
           </Button>
         </Box>
       </Paper>
 
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
         {/* Stats Bar */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 3 }}>
           <Grid item xs={6} md={3}>
             <StatCard
               title="Total Workouts"
@@ -396,7 +449,7 @@ export default function DashboardPage() {
           sx={{
             background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.05))',
             border: '1px solid #333',
-            p: 4,
+            p: { xs: 3, sm: 4 },
             mb: 3,
             textAlign: 'center'
           }}
@@ -409,13 +462,19 @@ export default function DashboardPage() {
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              mb: 3,
-              fontSize: { xs: '3rem', md: '4rem' }
+              mb: { xs: 2, sm: 3 },
+              fontSize: { xs: '2.5rem', sm: '3rem', md: '4rem' },
+              lineHeight: 1.1
             }}
           >
             {formatTime(timer.time)}
           </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: { xs: 1.5, sm: 2 },
+            flexWrap: 'wrap'
+          }}>
             <Button
               variant="contained"
               startIcon={<PlayIcon />}
@@ -423,7 +482,10 @@ export default function DashboardPage() {
               disabled={timer.isRunning}
               sx={{
                 background: 'linear-gradient(135deg, #ff4444, #cc0000)',
-                fontWeight: 700
+                fontWeight: 700,
+                minWidth: { xs: 80, sm: 100 },
+                py: { xs: 1, sm: 1.5 },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' }
               }}
             >
               START
@@ -436,7 +498,10 @@ export default function DashboardPage() {
               sx={{
                 background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
                 color: '#000',
-                fontWeight: 700
+                fontWeight: 700,
+                minWidth: { xs: 80, sm: 100 },
+                py: { xs: 1, sm: 1.5 },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' }
               }}
             >
               PAUSE
@@ -447,7 +512,10 @@ export default function DashboardPage() {
               onClick={stopTimer}
               sx={{
                 background: 'linear-gradient(135deg, #ff3333, #cc0000)',
-                fontWeight: 700
+                fontWeight: 700,
+                minWidth: { xs: 80, sm: 100 },
+                py: { xs: 1, sm: 1.5 },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' }
               }}
             >
               END

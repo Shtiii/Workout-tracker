@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import {
   Container,
   AppBar,
@@ -33,13 +33,14 @@ const modalStyle = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: 500,
-  maxHeight: '80vh',
+  width: { xs: '90vw', sm: 500 },
+  maxWidth: '500px',
+  maxHeight: '90vh',
   overflow: 'auto',
-  bgcolor: 'background.paper',
-  border: '2px solid #000',
-  boxShadow: 24,
-  p: 4,
+  bgcolor: '#1a1a1a',
+  border: '2px solid #ff4444',
+  boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+  p: { xs: 3, sm: 4 },
   borderRadius: 2,
 };
 
@@ -207,7 +208,7 @@ export default function ProgramsPage() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 } }}>
         {programs.length === 0 ? (
           <Box textAlign="center" mt={4}>
             <Typography variant="h6" color="text.secondary" gutterBottom>

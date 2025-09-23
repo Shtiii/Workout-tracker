@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   Container,
   Typography,
@@ -181,7 +181,14 @@ export default function AnalyticsPage() {
         <Grid container sx={{ mb: 2 }}>
           {dayNames.map(day => (
             <Grid item xs key={day} sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: { xs: '0.6rem', sm: '0.75rem' }
+                }}
+              >
                 {day}
               </Typography>
             </Grid>
@@ -189,12 +196,12 @@ export default function AnalyticsPage() {
         </Grid>
 
         {calendar.map((week, weekIndex) => (
-          <Grid container key={weekIndex} sx={{ mb: 1 }}>
+          <Grid container key={weekIndex} sx={{ mb: { xs: 0.5, sm: 1 } }}>
             {week.map((day, dayIndex) => (
-              <Grid item xs key={dayIndex} sx={{ p: 0.5 }}>
+              <Grid item xs key={dayIndex} sx={{ p: { xs: 0.25, sm: 0.5 } }}>
                 <Box
                   sx={{
-                    height: 40,
+                    height: { xs: 35, sm: 40 },
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -205,7 +212,10 @@ export default function AnalyticsPage() {
                     opacity: day.isCurrentMonth ? 1 : 0.3,
                     '&:hover': {
                       backgroundColor: day.hasWorkout ? '#ff6666' : '#333'
-                    }
+                    },
+                    // Better touch targets on mobile
+                    minHeight: { xs: 35, sm: 40 },
+                    minWidth: { xs: 35, sm: 40 }
                   }}
                 >
                   <Typography
@@ -455,7 +465,7 @@ export default function AnalyticsPage() {
         </Typography>
       </Paper>
 
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
         <Paper
           sx={{
             background: '#1a1a1a',
