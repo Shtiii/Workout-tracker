@@ -110,7 +110,7 @@ export default function DashboardPage() {
       await fetchWeeklyGoal();
 
       // Calculate stats
-      calculateStats(workoutsData);
+      calculateStats(workoutsData, weeklyGoalTarget);
       calculateRecords(workoutsData);
       generateWorkoutTemplates(workoutsData);
     } catch (error) {
@@ -246,10 +246,10 @@ export default function DashboardPage() {
     }
   }, [fetchData]);
 
-  const calculateStats = useCallback((workoutsData) => {
+  const calculateStats = (workoutsData, goalTarget = weeklyGoalTarget) => {
     const totalWorkouts = workoutsData.length;
     const currentStreak = calculateStreak(workoutsData);
-    const weeklyGoal = calculateWeeklyProgress(workoutsData);
+    const weeklyGoal = calculateWeeklyProgress(workoutsData, goalTarget);
 
     setStats({
       totalWorkouts,
@@ -261,7 +261,7 @@ export default function DashboardPage() {
     // Calculate achievements
     const userAchievements = calculateAchievements(workoutsData);
     setAchievements(userAchievements);
-  }, []);
+  };
 
   const calculateStreak = (workoutsData) => {
     if (workoutsData.length === 0) return 0;
@@ -286,17 +286,18 @@ export default function DashboardPage() {
     return streak;
   };
 
-  const calculateWeeklyProgress = (workoutsData) => {
+  const calculateWeeklyProgress = useCallback((workoutsData, targetGoal = weeklyGoalTarget) => {
     const now = new Date();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     weekStart.setHours(0, 0, 0, 0);
 
-    const weekWorkouts = workoutsData.filter(w =>
-      new Date(w.completedAt) >= weekStart
-    ).length;
+    const weekWorkouts = workoutsData.filter(w => {
+      const workoutDate = new Date(w.completedAt);
+      return workoutDate >= weekStart;
+    }).length;
 
-    return `${weekWorkouts}/${weeklyGoalTarget}`;
-  };
+    return `${weekWorkouts}/${targetGoal}`;
+  }, [weeklyGoalTarget]);
 
   const calculateUniqueExercises = (workoutsData) => {
     const exercises = new Set();
@@ -366,21 +367,30 @@ export default function DashboardPage() {
   };
 
   const saveWeeklyGoal = async () => {
+    if (!newGoalTarget || newGoalTarget < 1) {
+      setSnackbar({ open: true, message: 'Please enter a valid goal target', severity: 'error' });
+      return;
+    }
+
     try {
+      const goalTarget = parseInt(newGoalTarget);
+
       await setDoc(doc(db, 'settings', 'weeklyGoal'), {
-        target: parseInt(newGoalTarget),
+        target: goalTarget,
         updatedAt: new Date()
       });
 
-      setWeeklyGoalTarget(parseInt(newGoalTarget));
+      setWeeklyGoalTarget(goalTarget);
       setSnackbar({ open: true, message: 'Weekly goal updated! 🎯', severity: 'success' });
       setGoalModalOpen(false);
 
       // Recalculate stats with new goal
-      calculateStats(workouts);
+      if (workouts.length > 0) {
+        calculateStats(workouts, goalTarget);
+      }
     } catch (error) {
       console.error('Error saving weekly goal:', error);
-      setSnackbar({ open: true, message: 'Error saving goal', severity: 'error' });
+      setSnackbar({ open: true, message: `Error saving goal: ${error.message}`, severity: 'error' });
     }
   };
 
