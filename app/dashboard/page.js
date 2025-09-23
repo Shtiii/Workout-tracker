@@ -658,7 +658,7 @@ export default function DashboardPage() {
               {stats.currentStreak} {stats.currentStreak === 1 ? 'Day' : 'Days'}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Keep it up! You're building a strong fitness habit 💪
+              Keep it up! You&apos;re building a strong fitness habit 💪
             </Typography>
           </Paper>
         )}

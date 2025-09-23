@@ -12,7 +12,9 @@
       "Bash(del icon-192x192.png)",
       "Bash(del create-icons.js)",
       "Bash(where magick)",
-      "Bash(start generate-icons.html)"
+      "Bash(start generate-icons.html)",
+      "Bash(node:*)",
+      "Bash(npx eslint:*)"
     ],
     "deny": [],
     "ask": []
