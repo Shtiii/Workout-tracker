@@ -17,7 +17,11 @@ import {
   IconButton,
   List,
   ListItem,
-  ListItemText
+  ListItemText,
+  Divider,
+  Chip,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -29,7 +33,9 @@ const modalStyle = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: 400,
+  width: 500,
+  maxHeight: '80vh',
+  overflow: 'auto',
   bgcolor: 'background.paper',
   border: '2px solid #000',
   boxShadow: 24,
@@ -40,9 +46,11 @@ const modalStyle = {
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [newProgram, setNewProgram] = useState({
     name: '',
-    exercises: ['']
+    exercises: [{ name: '', sets: 3, reps: 10 }]
   });
 
   useEffect(() => {
@@ -51,65 +59,110 @@ export default function ProgramsPage() {
 
   const fetchPrograms = async () => {
     try {
+      console.log('Fetching programs...');
       const querySnapshot = await getDocs(collection(db, 'programs'));
       const programsData = [];
       querySnapshot.forEach((doc) => {
         programsData.push({ id: doc.id, ...doc.data() });
       });
+      console.log('Programs fetched:', programsData);
       setPrograms(programsData);
     } catch (error) {
       console.error('Error fetching programs:', error);
+      showSnackbar('Error fetching programs: ' + error.message, 'error');
     }
+  };
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const handleOpenModal = () => {
     setModalOpen(true);
+    setNewProgram({
+      name: '',
+      exercises: [{ name: '', sets: 3, reps: 10 }]
+    });
   };
 
   const handleCloseModal = () => {
     setModalOpen(false);
-    setNewProgram({ name: '', exercises: [''] });
+    setNewProgram({
+      name: '',
+      exercises: [{ name: '', sets: 3, reps: 10 }]
+    });
   };
 
   const handleProgramNameChange = (event) => {
     setNewProgram({ ...newProgram, name: event.target.value });
   };
 
-  const handleExerciseChange = (index, value) => {
+  const handleExerciseChange = (index, field, value) => {
     const updatedExercises = [...newProgram.exercises];
-    updatedExercises[index] = value;
+    updatedExercises[index] = { ...updatedExercises[index], [field]: value };
     setNewProgram({ ...newProgram, exercises: updatedExercises });
   };
 
   const addExercise = () => {
     setNewProgram({
       ...newProgram,
-      exercises: [...newProgram.exercises, '']
+      exercises: [...newProgram.exercises, { name: '', sets: 3, reps: 10 }]
     });
   };
 
   const removeExercise = (index) => {
-    const updatedExercises = newProgram.exercises.filter((_, i) => i !== index);
-    setNewProgram({ ...newProgram, exercises: updatedExercises });
+    if (newProgram.exercises.length > 1) {
+      const updatedExercises = newProgram.exercises.filter((_, i) => i !== index);
+      setNewProgram({ ...newProgram, exercises: updatedExercises });
+    }
   };
 
   const saveProgram = async () => {
-    if (newProgram.name.trim() === '') return;
+    console.log('Attempting to save program:', newProgram);
 
-    const filteredExercises = newProgram.exercises.filter(exercise => exercise.trim() !== '');
-    if (filteredExercises.length === 0) return;
+    // Validation
+    if (!newProgram.name.trim()) {
+      showSnackbar('Please enter a program name', 'error');
+      return;
+    }
+
+    const validExercises = newProgram.exercises.filter(exercise => exercise.name.trim() !== '');
+    if (validExercises.length === 0) {
+      showSnackbar('Please add at least one exercise with a name', 'error');
+      return;
+    }
 
     try {
-      await addDoc(collection(db, 'programs'), {
-        name: newProgram.name,
-        exercises: filteredExercises,
-        createdAt: new Date()
-      });
+      setLoading(true);
+      console.log('Saving to Firestore...');
 
-      fetchPrograms();
+      const programData = {
+        name: newProgram.name.trim(),
+        exercises: validExercises.map(ex => ({
+          name: ex.name.trim(),
+          sets: parseInt(ex.sets) || 3,
+          reps: parseInt(ex.reps) || 10
+        })),
+        createdAt: new Date()
+      };
+
+      console.log('Program data to save:', programData);
+
+      const docRef = await addDoc(collection(db, 'programs'), programData);
+      console.log('Program saved with ID:', docRef.id);
+
+      showSnackbar('Program created successfully!', 'success');
+      fetchPrograms(); // Refresh the list
       handleCloseModal();
     } catch (error) {
       console.error('Error saving program:', error);
+      showSnackbar('Error saving program: ' + error.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -124,37 +177,61 @@ export default function ProgramsPage() {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Grid container spacing={3}>
-          {programs.map((program) => (
-            <Grid item xs={12} sm={6} md={4} key={program.id}>
-              <motion.div
-                whileHover={{ scale: 1.03 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card>
-                  <CardContent>
-                    <Typography variant="h5" component="div" gutterBottom>
-                      {program.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Exercises:
-                    </Typography>
-                    <List dense>
-                      {program.exercises.map((exercise, index) => (
-                        <ListItem key={index} disablePadding>
-                          <ListItemText
-                            primary={exercise}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Grid>
-          ))}
-        </Grid>
+        {programs.length === 0 ? (
+          <Box textAlign="center" mt={4}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No programs yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Create your first workout program to get started!
+            </Typography>
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {programs.map((program) => (
+              <Grid item xs={12} sm={6} md={4} key={program.id}>
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" component="div" gutterBottom>
+                        {program.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Exercises:
+                      </Typography>
+                      <List dense>
+                        {program.exercises.map((exercise, index) => (
+                          <ListItem key={index} disablePadding>
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="body2">
+                                    {exercise.name || exercise}
+                                  </Typography>
+                                  {exercise.sets && exercise.reps && (
+                                    <Chip
+                                      size="small"
+                                      label={`${exercise.sets}x${exercise.reps}`}
+                                      variant="outlined"
+                                      color="primary"
+                                    />
+                                  )}
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
+        )}
       </Container>
 
       <Fab
@@ -187,31 +264,60 @@ export default function ProgramsPage() {
             value={newProgram.name}
             onChange={handleProgramNameChange}
             margin="normal"
+            required
           />
 
-          <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
+          <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>
             Exercises
           </Typography>
 
           {newProgram.exercises.map((exercise, index) => (
-            <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Box key={index} sx={{ mb: 3, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+                  Exercise {index + 1}
+                </Typography>
+                {newProgram.exercises.length > 1 && (
+                  <IconButton
+                    onClick={() => removeExercise(index)}
+                    color="error"
+                    size="small"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                )}
+              </Box>
+
               <TextField
                 fullWidth
-                label={`Exercise ${index + 1}`}
-                value={exercise}
-                onChange={(e) => handleExerciseChange(index, e.target.value)}
+                label="Exercise Name"
+                value={exercise.name}
+                onChange={(e) => handleExerciseChange(index, 'name', e.target.value)}
+                margin="normal"
                 size="small"
+                required
               />
-              {newProgram.exercises.length > 1 && (
-                <IconButton
-                  onClick={() => removeExercise(index)}
-                  color="error"
+
+              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <TextField
+                  label="Sets"
+                  type="number"
+                  value={exercise.sets}
+                  onChange={(e) => handleExerciseChange(index, 'sets', e.target.value)}
                   size="small"
-                  sx={{ ml: 1 }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              )}
+                  inputProps={{ min: 1, max: 10 }}
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  label="Reps"
+                  type="number"
+                  value={exercise.reps}
+                  onChange={(e) => handleExerciseChange(index, 'reps', e.target.value)}
+                  size="small"
+                  inputProps={{ min: 1, max: 50 }}
+                  sx={{ flex: 1 }}
+                />
+              </Box>
             </Box>
           ))}
 
@@ -219,25 +325,39 @@ export default function ProgramsPage() {
             variant="outlined"
             onClick={addExercise}
             startIcon={<AddIcon />}
-            sx={{ mt: 1, mb: 2 }}
+            sx={{ mb: 3 }}
+            fullWidth
           >
-            Add Exercise
+            Add Another Exercise
           </Button>
 
+          <Divider sx={{ mb: 2 }} />
+
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button onClick={handleCloseModal}>
+            <Button onClick={handleCloseModal} disabled={loading}>
               Cancel
             </Button>
             <Button
               variant="contained"
               onClick={saveProgram}
-              disabled={!newProgram.name.trim() || newProgram.exercises.every(ex => ex.trim() === '')}
+              disabled={loading || !newProgram.name.trim() || newProgram.exercises.every(ex => ex.name.trim() === '')}
             >
-              Save Program
+              {loading ? 'Saving...' : 'Save Program'}
             </Button>
           </Box>
         </Box>
       </Modal>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
