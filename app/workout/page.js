@@ -3,46 +3,95 @@
 import { useState, useEffect } from 'react';
 import {
   Container,
-  AppBar,
-  Toolbar,
   Typography,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   CircularProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Button,
   TextField,
   Box,
   Grid,
   Snackbar,
   Alert,
-  Divider
+  Paper,
+  Card,
+  CardContent,
+  IconButton,
+  Chip,
+  Modal
 } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon, Add as AddIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  PlayArrow as PlayIcon,
+  Pause as PauseIcon,
+  Stop as StopIcon,
+  Delete as DeleteIcon,
+  Timer as TimerIcon,
+  FitnessCenter as FitnessCenterIcon
+} from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+const modalStyle = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 500,
+  maxHeight: '80vh',
+  overflow: 'auto',
+  bgcolor: '#1a1a1a',
+  border: '2px solid #ff4444',
+  borderRadius: 2,
+  boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+  p: 4,
+};
 
 export default function WorkoutPage() {
   const [programs, setPrograms] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState('');
-  const [selectedProgram, setSelectedProgram] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [workoutSession, setWorkoutSession] = useState({
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [availableExercises, setAvailableExercises] = useState([]);
+
+  const [timer, setTimer] = useState({
+    time: 0,
+    isRunning: false,
+    startTime: null
+  });
+
+  const [activeWorkout, setActiveWorkout] = useState({
     programId: '',
     programName: '',
     exercises: [],
     startTime: null,
     endTime: null
   });
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
     fetchPrograms();
+    fetchExercises();
   }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (timer.isRunning) {
+      interval = setInterval(() => {
+        setTimer(prev => ({
+          ...prev,
+          time: Math.floor((Date.now() - prev.startTime) / 1000)
+        }));
+      }, 1000);
+    } else if (!timer.isRunning) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [timer.isRunning, timer.startTime]);
 
   const fetchPrograms = async () => {
     try {
@@ -55,9 +104,45 @@ export default function WorkoutPage() {
       setPrograms(programsData);
     } catch (error) {
       console.error('Error fetching programs:', error);
+      setSnackbarMessage('Error fetching programs');
+      setSnackbarOpen(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchExercises = async () => {
+    // Default exercises for the modal
+    setAvailableExercises([
+      'Bench Press', 'Squat', 'Deadlift', 'Overhead Press', 'Barbell Row',
+      'Pull-ups', 'Dips', 'Bicep Curls', 'Tricep Extensions', 'Lateral Raises'
+    ]);
+  };
+
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startTimer = () => {
+    setTimer({
+      time: 0,
+      isRunning: true,
+      startTime: Date.now()
+    });
+    if (!activeWorkout.startTime) {
+      setActiveWorkout(prev => ({ ...prev, startTime: new Date() }));
+    }
+  };
+
+  const pauseTimer = () => {
+    setTimer(prev => ({ ...prev, isRunning: false }));
+  };
+
+  const stopTimer = () => {
+    setTimer({ time: 0, isRunning: false, startTime: null });
   };
 
   const handleProgramSelect = (event) => {
@@ -65,15 +150,15 @@ export default function WorkoutPage() {
     setSelectedProgramId(programId);
 
     const program = programs.find(p => p.id === programId);
-    setSelectedProgram(program);
-
     if (program) {
-      const exercisesWithSets = program.exercises.map(exerciseName => ({
-        name: exerciseName,
+      const exercisesWithSets = program.exercises.map(exercise => ({
+        name: exercise.name,
+        targetSets: exercise.sets || 3,
+        targetReps: exercise.reps || 10,
         sets: []
       }));
 
-      setWorkoutSession({
+      setActiveWorkout({
         programId: program.id,
         programName: program.name,
         exercises: exercisesWithSets,
@@ -84,35 +169,70 @@ export default function WorkoutPage() {
   };
 
   const addSet = (exerciseIndex) => {
-    const updatedSession = { ...workoutSession };
-    updatedSession.exercises[exerciseIndex].sets.push({
+    const updatedWorkout = { ...activeWorkout };
+    updatedWorkout.exercises[exerciseIndex].sets.push({
       weight: '',
-      reps: ''
+      reps: '',
+      completed: false
     });
-    setWorkoutSession(updatedSession);
+    setActiveWorkout(updatedWorkout);
   };
 
   const updateSet = (exerciseIndex, setIndex, field, value) => {
-    const updatedSession = { ...workoutSession };
-    updatedSession.exercises[exerciseIndex].sets[setIndex][field] = value;
-    setWorkoutSession(updatedSession);
+    const updatedWorkout = { ...activeWorkout };
+    updatedWorkout.exercises[exerciseIndex].sets[setIndex][field] = value;
+    setActiveWorkout(updatedWorkout);
+  };
+
+  const completeSet = (exerciseIndex, setIndex) => {
+    const updatedWorkout = { ...activeWorkout };
+    updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed =
+      !updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed;
+    setActiveWorkout(updatedWorkout);
+  };
+
+  const addCustomExercise = (exerciseName) => {
+    const newExercise = {
+      name: exerciseName,
+      targetSets: 3,
+      targetReps: 10,
+      sets: []
+    };
+
+    setActiveWorkout(prev => ({
+      ...prev,
+      exercises: [...prev.exercises, newExercise]
+    }));
+    setModalOpen(false);
+  };
+
+  const removeExercise = (exerciseIndex) => {
+    const updatedWorkout = { ...activeWorkout };
+    updatedWorkout.exercises.splice(exerciseIndex, 1);
+    setActiveWorkout(updatedWorkout);
   };
 
   const finishWorkout = async () => {
-    if (!workoutSession.programId) return;
+    if (!activeWorkout.exercises.length) {
+      setSnackbarMessage('Add at least one exercise to save workout!');
+      setSnackbarOpen(true);
+      return;
+    }
 
     const sessionToSave = {
-      ...workoutSession,
+      ...activeWorkout,
       endTime: new Date(),
-      completedAt: new Date()
+      completedAt: new Date(),
+      duration: timer.time
     };
 
     try {
       await addDoc(collection(db, 'workoutSessions'), sessionToSave);
+      setSnackbarMessage('Workout Saved! 💪');
       setSnackbarOpen(true);
 
-      // Reset the workout session
-      setWorkoutSession({
+      // Reset workout state
+      setActiveWorkout({
         programId: '',
         programName: '',
         exercises: [],
@@ -120,161 +240,425 @@ export default function WorkoutPage() {
         endTime: null
       });
       setSelectedProgramId('');
-      setSelectedProgram(null);
+      stopTimer();
     } catch (error) {
-      console.error('Error saving workout session:', error);
+      console.error('Error saving workout:', error);
+      setSnackbarMessage('Error saving workout');
+      setSnackbarOpen(true);
     }
   };
 
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
-
-  return (
-    <>
-      <AppBar position="sticky">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Live Workout
-          </Typography>
-        </Toolbar>
-      </AppBar>
-
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <FormControl fullWidth sx={{ mb: 4 }}>
-          <InputLabel id="program-select-label">Choose a Program</InputLabel>
-          <Select
-            labelId="program-select-label"
-            id="program-select"
-            value={selectedProgramId}
-            label="Choose a Program"
-            onChange={handleProgramSelect}
-            disabled={loading}
-          >
-            {loading ? (
-              <MenuItem disabled>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CircularProgress size={20} />
-                  <Typography>Loading programs...</Typography>
-                </Box>
-              </MenuItem>
-            ) : (
-              programs.map((program) => (
-                <MenuItem key={program.id} value={program.id}>
-                  {program.name}
-                </MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
-
-        {selectedProgram && (
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="h5" gutterBottom>
-              {selectedProgram.name}
+  const ExerciseCard = ({ exercise, exerciseIndex }) => (
+    <motion.div
+      whileHover={{ x: 5 }}
+      transition={{ duration: 0.2 }}
+    >
+      <Card
+        sx={{
+          background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+          border: '1px solid #333',
+          mb: 2,
+          '&:hover': {
+            borderColor: 'primary.main',
+            boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)'
+          }
+        }}
+      >
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {exercise.name}
             </Typography>
-            <Divider sx={{ mb: 3 }} />
-
-            {workoutSession.exercises.map((exercise, exerciseIndex) => (
-              <Accordion key={exerciseIndex} sx={{ mb: 2 }}>
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon />}
-                  aria-controls={`exercise-${exerciseIndex}-content`}
-                  id={`exercise-${exerciseIndex}-header`}
-                >
-                  <Typography variant="h6">{exercise.name}</Typography>
-                  {exercise.sets.length > 0 && (
-                    <Typography variant="body2" sx={{ ml: 2, color: 'text.secondary' }}>
-                      ({exercise.sets.length} set{exercise.sets.length !== 1 ? 's' : ''})
-                    </Typography>
-                  )}
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Box sx={{ width: '100%' }}>
-                    {exercise.sets.length > 0 && (
-                      <Box sx={{ mb: 2 }}>
-                        <Grid container spacing={2} sx={{ mb: 1 }}>
-                          <Grid item xs={2}>
-                            <Typography variant="body2" fontWeight="bold">Set</Typography>
-                          </Grid>
-                          <Grid item xs={5}>
-                            <Typography variant="body2" fontWeight="bold">Weight (lbs)</Typography>
-                          </Grid>
-                          <Grid item xs={5}>
-                            <Typography variant="body2" fontWeight="bold">Reps</Typography>
-                          </Grid>
-                        </Grid>
-
-                        {exercise.sets.map((set, setIndex) => (
-                          <Grid container spacing={2} key={setIndex} sx={{ mb: 1 }}>
-                            <Grid item xs={2}>
-                              <Typography variant="body2" sx={{ mt: 1 }}>
-                                {setIndex + 1}
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={5}>
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={set.weight}
-                                onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
-                                placeholder="Weight"
-                                fullWidth
-                              />
-                            </Grid>
-                            <Grid item xs={5}>
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={set.reps}
-                                onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
-                                placeholder="Reps"
-                                fullWidth
-                              />
-                            </Grid>
-                          </Grid>
-                        ))}
-                      </Box>
-                    )}
-
-                    <Button
-                      variant="outlined"
-                      startIcon={<AddIcon />}
-                      onClick={() => addSet(exerciseIndex)}
-                      size="small"
-                    >
-                      Add Set
-                    </Button>
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-
-            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-              <Button
-                variant="contained"
-                size="large"
-                onClick={finishWorkout}
-                disabled={!workoutSession.exercises.some(ex => ex.sets.length > 0)}
-                sx={{ minWidth: 200, py: 1.5 }}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Chip
+                label={`Target: ${exercise.targetSets}×${exercise.targetReps}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+              <IconButton
+                onClick={() => removeExercise(exerciseIndex)}
+                color="error"
+                size="small"
               >
-                Finish & Save Workout
-              </Button>
+                <DeleteIcon />
+              </IconButton>
             </Box>
           </Box>
+
+          {exercise.sets.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Grid container spacing={1} sx={{ mb: 1 }}>
+                <Grid item xs={2}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>SET</Typography>
+                </Grid>
+                <Grid item xs={4}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>WEIGHT (LBS)</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>REPS</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>DONE</Typography>
+                </Grid>
+              </Grid>
+
+              {exercise.sets.map((set, setIndex) => (
+                <Grid container spacing={1} key={setIndex} sx={{ mb: 1 }}>
+                  <Grid item xs={2}>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                      {setIndex + 1}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={set.weight}
+                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
+                      placeholder="Weight"
+                      fullWidth
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: '#0a0a0a',
+                          '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'primary.main'
+                          }
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={3}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={set.reps}
+                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
+                      placeholder="Reps"
+                      fullWidth
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: '#0a0a0a',
+                          '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'primary.main'
+                          }
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Button
+                      variant={set.completed ? "contained" : "outlined"}
+                      size="small"
+                      onClick={() => completeSet(exerciseIndex, setIndex)}
+                      sx={{
+                        minWidth: '60px',
+                        fontWeight: 700,
+                        background: set.completed ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
+                        color: set.completed ? '#000' : 'primary.main'
+                      }}
+                    >
+                      ✓
+                    </Button>
+                  </Grid>
+                </Grid>
+              ))}
+            </Box>
+          )}
+
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => addSet(exerciseIndex)}
+            size="small"
+            sx={{
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: 1
+            }}
+          >
+            Add Set
+          </Button>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: `
+          radial-gradient(circle at 20% 50%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+          radial-gradient(circle at 80% 80%, rgba(255, 170, 0, 0.05) 0%, transparent 50%)
+        `,
+        pb: 10
+      }}
+    >
+      {/* Header */}
+      <Paper
+        sx={{
+          background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.1))',
+          border: '1px solid #333',
+          p: 3,
+          mb: 3,
+          backdropFilter: 'blur(10px)'
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 900,
+            background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            textAlign: 'center'
+          }}
+        >
+          💪 ACTIVE TRAINING SESSION
+        </Typography>
+      </Paper>
+
+      <Container maxWidth="lg">
+        {/* Timer */}
+        <Paper
+          sx={{
+            background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.05))',
+            border: '1px solid #333',
+            p: 4,
+            mb: 3,
+            textAlign: 'center'
+          }}
+        >
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 3,
+              fontSize: { xs: '3rem', md: '4rem' }
+            }}
+          >
+            {formatTime(timer.time)}
+          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mb: 3 }}>
+            <Button
+              variant="contained"
+              startIcon={<PlayIcon />}
+              onClick={startTimer}
+              disabled={timer.isRunning}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: 1
+              }}
+            >
+              START
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<PauseIcon />}
+              onClick={pauseTimer}
+              disabled={!timer.isRunning}
+              sx={{
+                background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
+                color: '#000',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: 1
+              }}
+            >
+              PAUSE
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<StopIcon />}
+              onClick={stopTimer}
+              sx={{
+                background: 'linear-gradient(135deg, #ff3333, #cc0000)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: 1
+              }}
+            >
+              END
+            </Button>
+          </Box>
+        </Paper>
+
+        {/* Program Selection */}
+        <Paper
+          sx={{
+            background: '#1a1a1a',
+            border: '1px solid #333',
+            p: 3,
+            mb: 3
+          }}
+        >
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel
+              sx={{
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                letterSpacing: 1
+              }}
+            >
+              Training Program
+            </InputLabel>
+            <Select
+              value={selectedProgramId}
+              label="Training Program"
+              onChange={handleProgramSelect}
+              disabled={loading}
+              sx={{
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#333',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                }
+              }}
+            >
+              <MenuItem value="">Custom Workout</MenuItem>
+              {loading ? (
+                <MenuItem disabled>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} />
+                    <Typography>Loading programs...</Typography>
+                  </Box>
+                </MenuItem>
+              ) : (
+                programs.map((program) => (
+                  <MenuItem key={program.id} value={program.id}>
+                    {program.name}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setModalOpen(true)}
+            sx={{
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: 1
+            }}
+          >
+            Add Exercise
+          </Button>
+        </Paper>
+
+        {/* Active Exercises */}
+        {activeWorkout.exercises.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mb: 3
+            }}
+          >
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+              🔥 EXERCISES
+            </Typography>
+            {activeWorkout.exercises.map((exercise, index) => (
+              <ExerciseCard key={index} exercise={exercise} exerciseIndex={index} />
+            ))}
+
+            <Button
+              variant="contained"
+              onClick={finishWorkout}
+              disabled={!activeWorkout.exercises.some(ex => ex.sets.length > 0)}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                width: '100%',
+                py: 2,
+                fontSize: '1.2rem'
+              }}
+            >
+              🏆 FINISH & SAVE WORKOUT
+            </Button>
+          </Paper>
+        )}
+
+        {activeWorkout.exercises.length === 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 4,
+              textAlign: 'center'
+            }}
+          >
+            <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+              No exercises added yet
+            </Typography>
+            <Typography color="text.secondary">
+              Select a program or add custom exercises to start your workout! 💪
+            </Typography>
+          </Paper>
         )}
       </Container>
+
+      {/* Add Exercise Modal */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <Box sx={modalStyle}>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+            Add Exercise
+          </Typography>
+          <Grid container spacing={2}>
+            {availableExercises.map((exercise, index) => (
+              <Grid item xs={12} sm={6} key={index}>
+                <Button
+                  variant="outlined"
+                  onClick={() => addCustomExercise(exercise)}
+                  sx={{
+                    width: '100%',
+                    p: 2,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                    '&:hover': {
+                      background: 'rgba(255, 68, 68, 0.1)',
+                      borderColor: 'primary.main'
+                    }
+                  }}
+                >
+                  {exercise}
+                </Button>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      </Modal>
 
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={6000}
-        onClose={handleSnackbarClose}
+        onClose={() => setSnackbarOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
-          Workout Saved!
+        <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
+          {snackbarMessage}
         </Alert>
       </Snackbar>
-    </>
+    </Box>
   );
 }

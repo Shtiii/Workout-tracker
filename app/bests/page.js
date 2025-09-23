@@ -3,16 +3,13 @@
 import { useState, useEffect } from 'react';
 import {
   Container,
-  AppBar,
-  Toolbar,
   Typography,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
   CircularProgress,
-  Box
+  Box,
+  Paper,
+  Card,
+  CardContent,
+  Grid
 } from '@mui/material';
 import { EmojiEvents as EmojiEventsIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -118,77 +115,209 @@ export default function PersonalBestsPage() {
 
   if (loading) {
     return (
-      <>
-        <AppBar position="sticky">
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              Personal Bests
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-          <Box display="flex" justifyContent="center" mt={4}>
-            <CircularProgress />
-          </Box>
-        </Container>
-      </>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: `
+            radial-gradient(circle at 20% 50%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(255, 170, 0, 0.05) 0%, transparent 50%)
+          `,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <CircularProgress size={60} sx={{ color: 'primary.main' }} />
+      </Box>
     );
   }
 
   return (
-    <>
-      <AppBar position="sticky">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Personal Bests
-          </Typography>
-        </Toolbar>
-      </AppBar>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: `
+          radial-gradient(circle at 20% 50%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+          radial-gradient(circle at 80% 80%, rgba(255, 170, 0, 0.05) 0%, transparent 50%)
+        `,
+        pb: 10
+      }}
+    >
+      {/* Header */}
+      <Paper
+        sx={{
+          background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.1))',
+          border: '1px solid #333',
+          p: 3,
+          mb: 3,
+          backdropFilter: 'blur(10px)'
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 900,
+            background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            textAlign: 'center'
+          }}
+        >
+          🏆 PERSONAL RECORDS
+        </Typography>
+      </Paper>
 
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth="lg">
         {personalBests.length === 0 ? (
-          <Box textAlign="center" mt={4}>
-            <Typography variant="h6" color="text.secondary">
-              No workout data found. Complete some workouts to see your personal bests!
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 4,
+              textAlign: 'center'
+            }}
+          >
+            <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+              No workout data found
             </Typography>
-          </Box>
+            <Typography color="text.secondary">
+              Complete some workouts to see your personal bests! 💪
+            </Typography>
+          </Paper>
         ) : (
           <motion.div
             variants={listVariants}
             initial="hidden"
             animate="visible"
           >
-            <List>
+            <Grid container spacing={3}>
               {personalBests.map((best, index) => (
-                <motion.div key={best.exerciseName} variants={itemVariants}>
-                  <ListItem>
-                    <ListItemIcon>
-                      <EmojiEventsIcon
-                        sx={{
-                          color: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : index === 2 ? '#CD7F32' : 'primary.main'
-                        }}
-                      />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={best.exerciseName}
-                      secondary={`${best.weight} lbs x ${best.reps} reps on ${formatDate(best.date)}`}
-                      primaryTypographyProps={{
-                        variant: 'h6',
-                        fontWeight: 500
+                <Grid item xs={12} md={6} lg={4} key={best.exerciseName}>
+                  <motion.div variants={itemVariants}>
+                    <Card
+                      sx={{
+                        background: `linear-gradient(135deg, rgba(26, 26, 26, 0.9), ${
+                          index === 0 ? 'rgba(255, 215, 0, 0.1)' :
+                          index === 1 ? 'rgba(192, 192, 192, 0.1)' :
+                          index === 2 ? 'rgba(205, 127, 50, 0.1)' :
+                          'rgba(255, 68, 68, 0.05)'
+                        })`,
+                        border: `1px solid ${
+                          index === 0 ? '#FFD700' :
+                          index === 1 ? '#C0C0C0' :
+                          index === 2 ? '#CD7F32' :
+                          '#333'
+                        }`,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: '0 0 20px rgba(255, 68, 68, 0.3)',
+                          transform: 'translateY(-5px)'
+                        },
+                        transition: 'all 0.3s'
                       }}
-                      secondaryTypographyProps={{
-                        variant: 'body2',
-                        color: 'text.secondary'
-                      }}
-                    />
-                  </ListItem>
-                  {index < personalBests.length - 1 && <Divider />}
-                </motion.div>
+                    >
+                      <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                        <Box sx={{ mb: 2 }}>
+                          <EmojiEventsIcon
+                            sx={{
+                              fontSize: 48,
+                              color: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : index === 2 ? '#CD7F32' : 'primary.main'
+                            }}
+                          />
+                          {index < 3 && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                position: 'absolute',
+                                top: 16,
+                                right: 16,
+                                background: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32',
+                                color: '#000',
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontWeight: 700
+                              }}
+                            >
+                              #{index + 1}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        <Typography
+                          variant="h5"
+                          sx={{
+                            fontWeight: 700,
+                            mb: 1,
+                            textTransform: 'uppercase',
+                            letterSpacing: 1
+                          }}
+                        >
+                          {best.exerciseName}
+                        </Typography>
+
+                        <Typography
+                          variant="h3"
+                          sx={{
+                            fontWeight: 900,
+                            background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            mb: 1
+                          }}
+                        >
+                          {best.weight} lbs
+                        </Typography>
+
+                        <Typography
+                          variant="body1"
+                          sx={{ mb: 1, fontWeight: 600 }}
+                        >
+                          {best.reps} reps
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            textTransform: 'uppercase',
+                            letterSpacing: 1,
+                            fontWeight: 600
+                          }}
+                        >
+                          {formatDate(best.date)}
+                        </Typography>
+
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: 4,
+                            background: `linear-gradient(90deg, ${
+                              index === 0 ? '#FFD700' :
+                              index === 1 ? '#C0C0C0' :
+                              index === 2 ? '#CD7F32' :
+                              '#ff4444'
+                            }, transparent)`
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
               ))}
-            </List>
+            </Grid>
           </motion.div>
         )}
       </Container>
-    </>
+    </Box>
   );
 }

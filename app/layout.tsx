@@ -19,10 +19,11 @@ export default function RootLayout({
   const router = useRouter();
 
   const navigationRoutes = [
-    { path: '/workout', label: 'Workout', icon: <FitnessCenterIcon /> },
+    { path: '/dashboard', label: 'Home', icon: <FitnessCenterIcon /> },
+    { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
     { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
-    { path: '/bests', label: 'Bests', icon: <EmojiEventsIcon /> },
-    { path: '/analytics', label: 'Analytics', icon: <AnalyticsIcon /> }
+    { path: '/goals', label: 'Goals', icon: <EmojiEventsIcon /> },
+    { path: '/bests', label: 'PRs', icon: <EmojiEventsIcon /> }
   ];
 
   useEffect(() => {

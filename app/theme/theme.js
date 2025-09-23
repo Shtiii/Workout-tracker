@@ -13,11 +13,22 @@ const theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#66bb6a',
+      main: '#ff4444',
+      dark: '#cc0000',
+    },
+    secondary: {
+      main: '#ffaa00',
+    },
+    success: {
+      main: '#00ff88',
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: '#0a0a0a',
+      paper: '#1a1a1a',
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: '#999999',
     },
   },
   typography: {
