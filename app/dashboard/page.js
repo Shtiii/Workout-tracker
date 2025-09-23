@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Container,
   Box,
@@ -31,6 +32,7 @@ import { collection, getDocs, addDoc, orderBy, query } from 'firebase/firestore'
 import { db } from '@/lib/firebase';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
   const [workouts, setWorkouts] = useState([]);
   const [programs, setPrograms] = useState([]);
@@ -334,11 +336,12 @@ export default function DashboardPage() {
               letterSpacing: 2
             }}
           >
-            💀 IRONTRACK
+            SHTII PLANNER
           </Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
+            onClick={() => router.push('/workout')}
             sx={{
               background: 'linear-gradient(135deg, #ff4444, #cc0000)',
               fontWeight: 700,

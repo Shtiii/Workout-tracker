@@ -166,7 +166,7 @@ export default function PersonalBestsPage() {
             textAlign: 'center'
           }}
         >
-          🏆 PERSONAL RECORDS
+          💪 PERSONAL RECORDS
         </Typography>
       </Paper>
 

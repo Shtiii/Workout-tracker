@@ -23,9 +23,9 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const modalStyle = {
@@ -48,6 +48,7 @@ export default function ProgramsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [editingProgram, setEditingProgram] = useState(null);
   const [newProgram, setNewProgram] = useState({
     name: '',
     exercises: [{ name: '', sets: 3, reps: 10 }]
@@ -81,16 +82,26 @@ export default function ProgramsPage() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleOpenModal = () => {
+  const handleOpenModal = (program = null) => {
+    if (program) {
+      setEditingProgram(program);
+      setNewProgram({
+        name: program.name,
+        exercises: program.exercises || [{ name: '', sets: 3, reps: 10 }]
+      });
+    } else {
+      setEditingProgram(null);
+      setNewProgram({
+        name: '',
+        exercises: [{ name: '', sets: 3, reps: 10 }]
+      });
+    }
     setModalOpen(true);
-    setNewProgram({
-      name: '',
-      exercises: [{ name: '', sets: 3, reps: 10 }]
-    });
   };
 
   const handleCloseModal = () => {
     setModalOpen(false);
+    setEditingProgram(null);
     setNewProgram({
       name: '',
       exercises: [{ name: '', sets: 3, reps: 10 }]
@@ -147,15 +158,22 @@ export default function ProgramsPage() {
           sets: parseInt(ex.sets) || 3,
           reps: parseInt(ex.reps) || 10
         })),
-        createdAt: new Date()
+        updatedAt: new Date()
       };
 
-      console.log('Program data to save:', programData);
-
-      const docRef = await addDoc(collection(db, 'programs'), programData);
-      console.log('Program saved with ID:', docRef.id);
-
-      showSnackbar('Program created successfully!', 'success');
+      if (editingProgram) {
+        // Update existing program
+        programData.createdAt = editingProgram.createdAt || new Date();
+        await updateDoc(doc(db, 'programs', editingProgram.id), programData);
+        console.log('Program updated with ID:', editingProgram.id);
+        showSnackbar('Program updated successfully!', 'success');
+      } else {
+        // Create new program
+        programData.createdAt = new Date();
+        const docRef = await addDoc(collection(db, 'programs'), programData);
+        console.log('Program saved with ID:', docRef.id);
+        showSnackbar('Program created successfully!', 'success');
+      }
       fetchPrograms(); // Refresh the list
       handleCloseModal();
     } catch (error) {
@@ -163,6 +181,19 @@ export default function ProgramsPage() {
       showSnackbar('Error saving program: ' + error.message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteProgram = async (programId) => {
+    if (confirm('Are you sure you want to delete this program?')) {
+      try {
+        await deleteDoc(doc(db, 'programs', programId));
+        showSnackbar('Program deleted successfully!', 'success');
+        fetchPrograms(); // Refresh the list
+      } catch (error) {
+        console.error('Error deleting program:', error);
+        showSnackbar('Error deleting program: ' + error.message, 'error');
+      }
     }
   };
 
@@ -196,9 +227,27 @@ export default function ProgramsPage() {
                 >
                   <Card>
                     <CardContent>
-                      <Typography variant="h5" component="div" gutterBottom>
-                        {program.name}
-                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                        <Typography variant="h5" component="div">
+                          {program.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <IconButton
+                            onClick={() => handleOpenModal(program)}
+                            color="primary"
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            onClick={() => deleteProgram(program.id)}
+                            color="error"
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      </Box>
                       <Typography variant="body2" color="text.secondary" gutterBottom>
                         Exercises:
                       </Typography>
@@ -255,7 +304,7 @@ export default function ProgramsPage() {
       >
         <Box sx={modalStyle}>
           <Typography id="modal-modal-title" variant="h6" component="h2" gutterBottom>
-            Create New Program
+            {editingProgram ? 'Edit Program' : 'Create New Program'}
           </Typography>
 
           <TextField
@@ -342,7 +391,7 @@ export default function ProgramsPage() {
               onClick={saveProgram}
               disabled={loading || !newProgram.name.trim() || newProgram.exercises.every(ex => ex.name.trim() === '')}
             >
-              {loading ? 'Saving...' : 'Save Program'}
+              {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Save Program'}
             </Button>
           </Box>
         </Box>

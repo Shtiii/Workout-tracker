@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Box, Paper, BottomNavigation, BottomNavigationAction } from '@mui/material';
-import { FitnessCenter as FitnessCenterIcon, ViewList as ViewListIcon, Analytics as AnalyticsIcon, EmojiEvents as EmojiEventsIcon } from '@mui/icons-material';
+import { FitnessCenter as FitnessCenterIcon, ViewList as ViewListIcon, Analytics as AnalyticsIcon, EmojiEvents as EmojiEventsIcon, Dashboard as DashboardIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import ThemeRegistry from './theme/ThemeRegistry';
 import "./globals.css";
@@ -19,9 +19,10 @@ export default function RootLayout({
   const router = useRouter();
 
   const navigationRoutes = [
-    { path: '/dashboard', label: 'Home', icon: <FitnessCenterIcon /> },
+    { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
     { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
     { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
+    { path: '/analytics', label: 'Analytics', icon: <CalendarIcon /> },
     { path: '/goals', label: 'Goals', icon: <EmojiEventsIcon /> },
     { path: '/bests', label: 'PRs', icon: <EmojiEventsIcon /> }
   ];
