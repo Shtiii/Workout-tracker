@@ -23,8 +23,7 @@ export default function RootLayout({
     { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
     { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
     { path: '/analytics', label: 'Analytics', icon: <CalendarIcon /> },
-    { path: '/goals', label: 'Goals', icon: <EmojiEventsIcon /> },
-    { path: '/bests', label: 'PRs', icon: <EmojiEventsIcon /> }
+    { path: '/goals-records', label: 'Goals & PRs', icon: <EmojiEventsIcon /> }
   ], []);
 
   useEffect(() => {

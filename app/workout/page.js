@@ -125,11 +125,11 @@ export default function WorkoutPage() {
   };
 
   const startTimer = () => {
-    setTimer({
-      time: 0,
+    setTimer(prev => ({
+      ...prev,
       isRunning: true,
-      startTime: Date.now()
-    });
+      startTime: Date.now() - (prev.time * 1000)
+    }));
     if (!activeWorkout.startTime) {
       setActiveWorkout(prev => ({ ...prev, startTime: new Date() }));
     }

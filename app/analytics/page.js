@@ -541,8 +541,12 @@ export default function AnalyticsPage() {
             <Tab label="📈 Progress" />
           </Tabs>
 
-          <Box sx={{ p: 3 }}>
-            {activeTab === 0 && <CalendarView />}
+          <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+            {activeTab === 0 && (
+              <Box sx={{ width: '100%', maxWidth: '800px' }}>
+                <CalendarView />
+              </Box>
+            )}
             {activeTab === 1 && <ProgressView />}
           </Box>
         </Paper>

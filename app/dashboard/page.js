@@ -191,11 +191,11 @@ export default function DashboardPage() {
   };
 
   const startTimer = () => {
-    setTimer({
-      time: 0,
+    setTimer(prev => ({
+      ...prev,
       isRunning: true,
-      startTime: Date.now()
-    });
+      startTime: Date.now() - (prev.time * 1000)
+    }));
   };
 
   const pauseTimer = () => {
@@ -431,7 +431,12 @@ export default function DashboardPage() {
 
       <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
         {/* Stats Bar */}
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 3 }}>
+        <Grid
+          container
+          spacing={{ xs: 1.5, sm: 2 }}
+          sx={{ mb: 3 }}
+          justifyContent="center"
+        >
           <Grid item xs={6} md={3}>
             <StatCard
               title="Total Workouts"
@@ -553,11 +558,14 @@ export default function DashboardPage() {
             p: 3
           }}
         >
-          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
-            RECENT ACTIVITY
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+            RECENT ACTIVITY & PERSONAL RECORDS
           </Typography>
-          <Grid container spacing={3}>
+          <Grid container spacing={3} alignItems="flex-start">
             <Grid item xs={12} md={8}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+                🔥 RECENT WORKOUTS
+              </Typography>
               {workouts.slice(0, 5).map((workout) => (
                 <WorkoutCard key={workout.id} workout={workout} onDelete={deleteWorkout} />
               ))}
@@ -569,7 +577,7 @@ export default function DashboardPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                PERSONAL RECORDS 💪
+                💪 PERSONAL RECORDS
               </Typography>
               {Object.entries(records).slice(0, 5).map(([exercise, weight]) => (
                 <motion.div
