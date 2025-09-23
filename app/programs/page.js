@@ -55,10 +55,6 @@ export default function ProgramsPage() {
     exercises: [{ name: '', sets: 3, reps: 10 }]
   });
 
-  useEffect(() => {
-    fetchPrograms();
-  }, [fetchPrograms]);
-
   const fetchPrograms = useCallback(async () => {
     try {
       console.log('Fetching programs...');
@@ -74,6 +70,10 @@ export default function ProgramsPage() {
       showSnackbar('Error fetching programs: ' + error.message, 'error');
     }
   }, []);
+
+  useEffect(() => {
+    fetchPrograms();
+  }, [fetchPrograms]);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });

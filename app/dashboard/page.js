@@ -46,21 +46,6 @@ export default function DashboardPage() {
     startTime: null
   });
 
-  useEffect(() => {
-    let interval = null;
-    if (timer.isRunning) {
-      interval = setInterval(() => {
-        setTimer(prev => ({
-          ...prev,
-          time: Math.floor((Date.now() - prev.startTime) / 1000)
-        }));
-      }, 1000);
-    } else if (!timer.isRunning) {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [timer.isRunning, timer.startTime]);
-
   const fetchData = useCallback(async () => {
     try {
       // Fetch workouts
@@ -95,6 +80,21 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let interval = null;
+    if (timer.isRunning) {
+      interval = setInterval(() => {
+        setTimer(prev => ({
+          ...prev,
+          time: Math.floor((Date.now() - prev.startTime) / 1000)
+        }));
+      }, 1000);
+    } else if (!timer.isRunning) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [timer.isRunning, timer.startTime]);
 
   const deleteWorkout = useCallback(async (workoutId) => {
     if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {

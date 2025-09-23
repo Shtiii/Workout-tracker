@@ -20,10 +20,6 @@ export default function PersonalBestsPage() {
   const [personalBests, setPersonalBests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPersonalBests();
-  }, [fetchPersonalBests]);
-
   const processPersonalBests = useCallback((sessions) => {
     const exerciseBests = {};
 
@@ -78,6 +74,10 @@ export default function PersonalBestsPage() {
       setLoading(false);
     }
   }, [processPersonalBests]);
+
+  useEffect(() => {
+    fetchPersonalBests();
+  }, [fetchPersonalBests]);
 
 
   const calculateOneRepMax = (weight, reps) => {

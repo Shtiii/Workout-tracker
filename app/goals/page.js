@@ -60,10 +60,6 @@ export default function GoalsPage() {
 
   const goalCategories = ['Strength', 'Endurance', 'Weight Loss', 'Muscle Gain', 'General Fitness'];
 
-  useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
-
   const fetchGoals = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'goals'));
@@ -77,6 +73,10 @@ export default function GoalsPage() {
       showSnackbar('Error fetching goals', 'error');
     }
   }, []);
+
+  useEffect(() => {
+    fetchGoals();
+  }, [fetchGoals]);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
