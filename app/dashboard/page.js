@@ -15,7 +15,12 @@ import {
   Modal,
   TextField,
   Snackbar,
-  Alert
+  Alert,
+  Checkbox,
+  FormControlLabel,
+  List,
+  ListItem,
+  Divider
 } from '@mui/material';
 import {
   FitnessCenter as FitnessCenterIcon,
@@ -24,8 +29,8 @@ import {
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   Stop as StopIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, orderBy, query, deleteDoc, doc, setDoc, addDoc } from 'firebase/firestore';
@@ -68,6 +73,9 @@ export default function DashboardPage() {
     startTime: null
   });
   const [workoutTemplates, setWorkoutTemplates] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [quickStartSettings, setQuickStartSettings] = useState([]);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   const fetchWeeklyGoal = useCallback(async () => {
     try {
@@ -101,6 +109,43 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const fetchPrograms = useCallback(async () => {
+    try {
+      if (!db) {
+        console.warn('Firebase not available for fetching programs');
+        return;
+      }
+
+      const programsSnapshot = await getDocs(collection(db, 'programs'));
+      const programsData = programsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPrograms(programsData.filter(program => !program.isTemplate)); // Exclude template programs
+      console.log('Fetched programs for quick start:', programsData);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    }
+  }, []);
+
+  const fetchQuickStartSettings = useCallback(async () => {
+    try {
+      if (!db) return;
+
+      const settingsSnapshot = await getDocs(query(collection(db, 'settings')));
+      const quickStartDoc = settingsSnapshot.docs.find(doc => doc.id === 'quickStartWorkouts');
+
+      if (quickStartDoc) {
+        setQuickStartSettings(quickStartDoc.data().programIds || []);
+      } else {
+        // Default: show all programs if no settings exist
+        setQuickStartSettings([]);
+      }
+    } catch (error) {
+      console.error('Error fetching quick start settings:', error);
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       // Fetch workouts
@@ -116,13 +161,9 @@ export default function DashboardPage() {
       }));
       setWorkouts(workoutsData);
 
-      // Fetch programs (commented out as programs state is not used)
-      // const programsSnapshot = await getDocs(collection(db, 'programs'));
-      // const programsData = programsSnapshot.docs.map(doc => ({
-      //   id: doc.id,
-      //   ...doc.data()
-      // }));
-      // setPrograms(programsData);
+      // Fetch programs and quick start settings
+      await fetchPrograms();
+      await fetchQuickStartSettings();
 
       // Fetch weekly goal target
       await fetchWeeklyGoal();
@@ -130,11 +171,12 @@ export default function DashboardPage() {
       // Calculate stats
       calculateStats(workoutsData, weeklyGoalTarget);
       calculateRecords(workoutsData);
-      generateWorkoutTemplates(workoutsData);
+
+      // Generate workout templates based on programs after they're loaded
     } catch (error) {
       console.error('Error fetching data:', error);
     }
-  }, [fetchWeeklyGoal]);
+  }, [fetchWeeklyGoal, fetchPrograms, fetchQuickStartSettings]);
 
   const generateWorkoutTemplates = (workoutsData) => {
     // Create templates from recent workouts
@@ -211,8 +253,96 @@ export default function DashboardPage() {
     setWorkoutTemplates(templates.slice(0, 4)); // Show max 4 templates
   };
 
+  const generateWorkoutTemplatesFromPrograms = useCallback(() => {
+    if (programs.length === 0) return;
+
+    const templates = [];
+
+    // Get selected programs (or all if none selected)
+    const selectedPrograms = quickStartSettings.length > 0
+      ? programs.filter(program => quickStartSettings.includes(program.id))
+      : programs.slice(0, 4); // Show first 4 programs if no selection
+
+    selectedPrograms.forEach(program => {
+      if (program.exercises && program.exercises.length > 0) {
+        templates.push({
+          name: `🔥 ${program.name}`,
+          description: program.description || `${program.name} workout program`,
+          exercises: program.exercises.map(ex => ({
+            name: ex.name,
+            targetSets: ex.sets || ex.targetSets || 3,
+            targetReps: ex.reps || ex.targetReps || 10
+          })),
+          programId: program.id,
+          isFromProgram: true
+        });
+      }
+    });
+
+    // Add fallback templates if no programs or selected programs
+    if (templates.length === 0) {
+      templates.push(
+        {
+          name: '💪 Push Day',
+          description: 'Chest, shoulders, and triceps workout',
+          exercises: [
+            { name: 'Bench Press', targetSets: 4, targetReps: 8 },
+            { name: 'Overhead Press', targetSets: 3, targetReps: 10 },
+            { name: 'Dumbbell Flyes', targetSets: 3, targetReps: 12 },
+            { name: 'Tricep Dips', targetSets: 3, targetReps: 10 }
+          ]
+        },
+        {
+          name: '🏃 Pull Day',
+          description: 'Back and biceps workout',
+          exercises: [
+            { name: 'Pull-ups', targetSets: 4, targetReps: 8 },
+            { name: 'Bent-over Row', targetSets: 3, targetReps: 10 },
+            { name: 'Lat Pulldown', targetSets: 3, targetReps: 12 },
+            { name: 'Bicep Curls', targetSets: 3, targetReps: 12 }
+          ]
+        },
+        {
+          name: '🦵 Leg Day',
+          description: 'Lower body workout',
+          exercises: [
+            { name: 'Squats', targetSets: 4, targetReps: 10 },
+            { name: 'Deadlifts', targetSets: 3, targetReps: 8 },
+            { name: 'Lunges', targetSets: 3, targetReps: 12 },
+            { name: 'Calf Raises', targetSets: 3, targetReps: 15 }
+          ]
+        }
+      );
+    }
+
+    setWorkoutTemplates(templates.slice(0, 4)); // Show max 4 templates
+  }, [programs, quickStartSettings]);
+
+  const saveQuickStartSettings = useCallback(async (selectedProgramIds) => {
+    try {
+      if (!db) return;
+
+      await setDoc(doc(db, 'settings', 'quickStartWorkouts'), {
+        programIds: selectedProgramIds,
+        updatedAt: new Date()
+      });
+
+      setQuickStartSettings(selectedProgramIds);
+      setSnackbar({ open: true, message: 'Quick start workouts updated! 🚀', severity: 'success' });
+    } catch (error) {
+      console.error('Error saving quick start settings:', error);
+      setSnackbar({ open: true, message: 'Error updating quick start workouts', severity: 'error' });
+    }
+  }, []);
+
   const startTemplateWorkout = async (template) => {
     try {
+      // If template is from a program, redirect directly to workout with program ID
+      if (template.isFromProgram && template.programId) {
+        router.push(`/workout?programId=${template.programId}`);
+        return;
+      }
+
       // Create a new program in Firebase based on the template
       const programData = {
         name: template.name,
@@ -236,6 +366,13 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Generate workout templates when programs or settings change
+  useEffect(() => {
+    if (programs.length > 0) {
+      generateWorkoutTemplatesFromPrograms();
+    }
+  }, [programs, quickStartSettings, generateWorkoutTemplatesFromPrograms]);
 
   useEffect(() => {
     let interval = null;
@@ -706,25 +843,6 @@ export default function DashboardPage() {
           >
             SHTII PLANNER
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => router.push('/workout')}
-            sx={{
-              background: 'linear-gradient(135deg, #ff4444, #cc0000)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              minWidth: { xs: 'auto', sm: 120 },
-              px: { xs: 2, sm: 3 },
-              py: { xs: 1, sm: 1.5 },
-              fontSize: { xs: '0.8rem', sm: '0.875rem' }
-            }}
-          >
-            {/* Hide text on very small screens, show icon only */}
-            <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>Quick Add</Box>
-            <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>+</Box>
-          </Button>
         </Box>
       </Paper>
 
@@ -781,9 +899,23 @@ export default function DashboardPage() {
               mb: 3
             }}
           >
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
-              ⚡ QUICK START WORKOUTS
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, textAlign: 'center', flex: 1 }}>
+                ⚡ QUICK START WORKOUTS
+              </Typography>
+              <IconButton
+                onClick={() => setSettingsModalOpen(true)}
+                sx={{
+                  color: 'primary.main',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 68, 68, 0.1)'
+                  }
+                }}
+                title="Customize quick start workouts"
+              >
+                <SettingsIcon />
+              </IconButton>
+            </Box>
             <Grid container spacing={2}>
               {workoutTemplates.map((template, index) => (
                 <Grid item xs={12} sm={6} md={3} key={index}>
@@ -1144,6 +1276,100 @@ export default function DashboardPage() {
               }}
             >
               Save Goal
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Quick Start Settings Modal */}
+      <Modal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: { xs: '90vw', sm: 600 },
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            bgcolor: '#1a1a1a',
+            border: '2px solid #ff4444',
+            borderRadius: 2,
+            boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+            p: 4,
+          }}
+        >
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+            ⚙️ Customize Quick Start Workouts
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Select which programs should appear as quick start workouts on your dashboard.
+            Leave all unchecked to show the first 4 programs by default.
+          </Typography>
+
+          {programs.length === 0 ? (
+            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No programs found. Create some programs first in the Programs section.
+            </Typography>
+          ) : (
+            <List sx={{ maxHeight: '400px', overflow: 'auto' }}>
+              {programs.map((program, index) => (
+                <Box key={program.id}>
+                  <ListItem>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={quickStartSettings.includes(program.id)}
+                          onChange={(e) => {
+                            const newSettings = e.target.checked
+                              ? [...quickStartSettings, program.id]
+                              : quickStartSettings.filter(id => id !== program.id);
+                            setQuickStartSettings(newSettings);
+                          }}
+                          sx={{
+                            color: 'primary.main',
+                            '&.Mui-checked': {
+                              color: 'primary.main',
+                            },
+                          }}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            {program.name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {program.exercises?.length || 0} exercises
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                  {index < programs.length - 1 && <Divider />}
+                </Box>
+              ))}
+            </List>
+          )}
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
+            <Button onClick={() => setSettingsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                saveQuickStartSettings(quickStartSettings);
+                setSettingsModalOpen(false);
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700
+              }}
+            >
+              Save Settings
             </Button>
           </Box>
         </Box>
