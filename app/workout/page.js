@@ -93,11 +93,62 @@ export default function WorkoutPage() {
     endTime: null
   });
 
+  // Screen wake lock for mobile during workouts
+  const [wakeLock, setWakeLock] = useState(null);
+
+  // Auto-advance settings
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
+
+  // Quick stats for header
+  const [quickStats, setQuickStats] = useState({
+    totalWorkouts: 0,
+    currentStreak: 0,
+    weeklyProgress: '0/3'
+  });
+
   useEffect(() => {
     setMounted(true);
     fetchPrograms();
     fetchExercises();
+    fetchQuickStats();
   }, []);
+
+  // Screen wake lock management
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && timer.isRunning) {
+          const lock = await navigator.wakeLock.request('screen');
+          setWakeLock(lock);
+          console.log('Screen wake lock activated');
+
+          lock.addEventListener('release', () => {
+            console.log('Screen wake lock released');
+          });
+        }
+      } catch (err) {
+        console.log('Wake lock not supported or failed:', err);
+      }
+    };
+
+    const releaseWakeLock = () => {
+      if (wakeLock) {
+        wakeLock.release();
+        setWakeLock(null);
+      }
+    };
+
+    if (timer.isRunning) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      releaseWakeLock();
+    };
+  }, [timer.isRunning, wakeLock]);
 
   useEffect(() => {
     let interval = null;
@@ -162,6 +213,56 @@ export default function WorkoutPage() {
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchQuickStats = async () => {
+    try {
+      if (!db) return;
+
+      const workoutsQuery = query(
+        collection(db, 'workoutSessions'),
+        orderBy('completedAt', 'desc')
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const workouts = workoutsSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        completedAt: doc.data().completedAt?.toDate() || new Date()
+      }));
+
+      // Calculate stats
+      const totalWorkouts = workouts.length;
+
+      // Calculate current streak
+      let currentStreak = 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < workouts.length; i++) {
+        const workoutDate = new Date(workouts[i].completedAt);
+        workoutDate.setHours(0, 0, 0, 0);
+
+        const daysDiff = Math.floor((today - workoutDate) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff === i) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+
+      // Calculate weekly progress
+      const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+      const weekWorkouts = workouts.filter(w => new Date(w.completedAt) >= weekStart).length;
+      const weeklyProgress = `${weekWorkouts}/3`;
+
+      setQuickStats({
+        totalWorkouts,
+        currentStreak,
+        weeklyProgress
+      });
+    } catch (error) {
+      console.error('Error fetching quick stats:', error);
     }
   };
 
@@ -287,7 +388,8 @@ export default function WorkoutPage() {
           sets: [{
             weight: smartDefaults.weight,
             reps: smartDefaults.reps,
-            completed: false
+            completed: false,
+            rpe: ''
           }]
         };
       });
@@ -307,7 +409,7 @@ export default function WorkoutPage() {
     const exercise = updatedWorkout.exercises[exerciseIndex];
 
     // Get smart defaults for the new set
-    let newSet = { weight: '', reps: '', completed: false };
+    let newSet = { weight: '', reps: '', completed: false, rpe: '' };
 
     // If there are existing sets, use the last completed set as reference
     const completedSets = exercise.sets.filter(set => set.completed && set.weight && set.reps);
@@ -316,7 +418,8 @@ export default function WorkoutPage() {
       newSet = {
         weight: lastSet.weight,
         reps: lastSet.reps,
-        completed: false
+        completed: false,
+        rpe: lastSet.rpe || ''
       };
     } else {
       // Use exercise history for smart defaults
@@ -324,7 +427,8 @@ export default function WorkoutPage() {
       newSet = {
         weight: smartDefaults.weight,
         reps: smartDefaults.reps,
-        completed: false
+        completed: false,
+        rpe: ''
       };
     }
 
@@ -338,11 +442,41 @@ export default function WorkoutPage() {
     setActiveWorkout(updatedWorkout);
   };
 
+  // Quick increment/decrement functions for mobile optimization
+  const adjustWeight = (exerciseIndex, setIndex, increment) => {
+    const currentSet = activeWorkout.exercises[exerciseIndex].sets[setIndex];
+    const currentWeight = parseFloat(currentSet.weight) || 0;
+    const newWeight = Math.max(0, currentWeight + increment);
+    updateSet(exerciseIndex, setIndex, 'weight', newWeight.toString());
+  };
+
+  const adjustReps = (exerciseIndex, setIndex, increment) => {
+    const currentSet = activeWorkout.exercises[exerciseIndex].sets[setIndex];
+    const currentReps = parseInt(currentSet.reps) || 0;
+    const newReps = Math.max(0, currentReps + increment);
+    updateSet(exerciseIndex, setIndex, 'reps', newReps.toString());
+  };
+
   const completeSet = (exerciseIndex, setIndex) => {
     const updatedWorkout = { ...activeWorkout };
     const wasCompleted = updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed;
     updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed = !wasCompleted;
     setActiveWorkout(updatedWorkout);
+
+    // Haptic feedback on completion
+    if (!wasCompleted && 'vibrate' in navigator) {
+      navigator.vibrate([50, 50, 50]);
+    }
+
+    // Auto-advance: Add next set if this was the last incomplete set
+    if (!wasCompleted && autoAdvanceEnabled) {
+      const currentExercise = updatedWorkout.exercises[exerciseIndex];
+      const incompleteSets = currentExercise.sets.filter(set => !set.completed);
+      if (incompleteSets.length === 0) {
+        // All sets completed, add a new set
+        setTimeout(() => addSet(exerciseIndex), 100);
+      }
+    }
 
     // Start rest timer if set was just completed and auto-start is enabled
     if (!wasCompleted && restSettings.enabled && restSettings.autoStart) {
@@ -700,142 +834,240 @@ export default function WorkoutPage() {
           {exercise.sets.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Grid container spacing={1} sx={{ mb: 1 }}>
+                <Grid item xs={1.5}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>SET</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>WEIGHT (KG)</Typography>
+                </Grid>
+                <Grid item xs={2.5}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>REPS</Typography>
+                </Grid>
                 <Grid item xs={2}>
-                  <Typography variant="caption" sx={{ fontWeight: 600 }}>SET</Typography>
-                </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="caption" sx={{ fontWeight: 600 }}>WEIGHT (LBS)</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>RPE</Typography>
                 </Grid>
                 <Grid item xs={3}>
-                  <Typography variant="caption" sx={{ fontWeight: 600 }}>REPS</Typography>
-                </Grid>
-                <Grid item xs={3}>
-                  <Typography variant="caption" sx={{ fontWeight: 600 }}>DONE</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>DONE</Typography>
                 </Grid>
               </Grid>
 
               {exercise.sets.map((set, setIndex) => (
-                <Grid container spacing={1} key={setIndex} sx={{ mb: 2 }}>
-                  <Grid item xs={2}>
-                    <Box sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: { xs: '48px', sm: '40px' },
-                      bgcolor: set.completed ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 68, 68, 0.1)',
-                      borderRadius: 1,
-                      border: `1px solid ${set.completed ? '#00ff88' : '#333'}`
-                    }}>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: set.completed ? '#00ff88' : 'text.primary' }}>
-                        {setIndex + 1}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={4}>
-                    <TextField
-                      size="medium"
-                      type="number"
-                      value={set.weight}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
-                      placeholder="Weight"
-                      fullWidth
-                      inputProps={{
-                        style: {
-                          fontSize: { xs: '1.1rem', sm: '1rem' },
-                          textAlign: 'center',
-                          fontWeight: 600
-                        },
-                        inputMode: 'decimal',
-                        pattern: '[0-9]*'
-                      }}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          backgroundColor: '#0a0a0a',
-                          height: { xs: '48px', sm: '40px' },
-                          fontSize: { xs: '1.1rem', sm: '1rem' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main'
-                          },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main',
-                            borderWidth: '2px'
+                <Box key={setIndex} sx={{ mb: 3, p: 2, border: '1px solid #333', borderRadius: 2, bgcolor: 'rgba(26, 26, 26, 0.5)' }}>
+                  <Grid container spacing={1} alignItems="stretch">
+                    {/* Set Number */}
+                    <Grid item xs={1.5}>
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '56px',
+                        bgcolor: set.completed ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 68, 68, 0.1)',
+                        borderRadius: 1,
+                        border: `2px solid ${set.completed ? '#00ff88' : '#ff4444'}`
+                      }}>
+                        <Typography variant="h5" sx={{ fontWeight: 900, color: set.completed ? '#00ff88' : '#ff4444' }}>
+                          {setIndex + 1}
+                        </Typography>
+                      </Box>
+                    </Grid>
+
+                    {/* Weight with increment buttons */}
+                    <Grid item xs={3}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <IconButton
+                            onClick={() => adjustWeight(exerciseIndex, setIndex, -2.5)}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(255, 68, 68, 0.1)',
+                              color: '#ff4444',
+                              minWidth: '28px',
+                              height: '28px',
+                              '&:hover': { bgcolor: 'rgba(255, 68, 68, 0.2)' }
+                            }}
+                          >
+                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>-2.5</Typography>
+                          </IconButton>
+                          <IconButton
+                            onClick={() => adjustWeight(exerciseIndex, setIndex, 2.5)}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(0, 255, 136, 0.1)',
+                              color: '#00ff88',
+                              minWidth: '28px',
+                              height: '28px',
+                              '&:hover': { bgcolor: 'rgba(0, 255, 136, 0.2)' }
+                            }}
+                          >
+                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+2.5</Typography>
+                          </IconButton>
+                        </Box>
+                        <TextField
+                          type="number"
+                          value={set.weight}
+                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
+                          placeholder="kg"
+                          fullWidth
+                          inputProps={{
+                            inputMode: 'decimal',
+                            pattern: '[0-9]*',
+                            style: {
+                              fontSize: '1.2rem',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              padding: '8px'
+                            }
+                          }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              backgroundColor: '#0a0a0a',
+                              height: '50px',
+                              fontSize: '1.2rem',
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main'
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main',
+                                borderWidth: '2px'
+                              }
+                            }
+                          }}
+                        />
+                      </Box>
+                    </Grid>
+
+                    {/* Reps with increment buttons */}
+                    <Grid item xs={2.5}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <IconButton
+                            onClick={() => adjustReps(exerciseIndex, setIndex, -1)}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(255, 68, 68, 0.1)',
+                              color: '#ff4444',
+                              minWidth: '24px',
+                              height: '24px',
+                              '&:hover': { bgcolor: 'rgba(255, 68, 68, 0.2)' }
+                            }}
+                          >
+                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>-1</Typography>
+                          </IconButton>
+                          <IconButton
+                            onClick={() => adjustReps(exerciseIndex, setIndex, 1)}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(0, 255, 136, 0.1)',
+                              color: '#00ff88',
+                              minWidth: '24px',
+                              height: '24px',
+                              '&:hover': { bgcolor: 'rgba(0, 255, 136, 0.2)' }
+                            }}
+                          >
+                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+1</Typography>
+                          </IconButton>
+                        </Box>
+                        <TextField
+                          type="number"
+                          value={set.reps}
+                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
+                          placeholder="reps"
+                          fullWidth
+                          inputProps={{
+                            inputMode: 'numeric',
+                            pattern: '[0-9]*',
+                            style: {
+                              fontSize: '1.2rem',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              padding: '8px'
+                            }
+                          }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              backgroundColor: '#0a0a0a',
+                              height: '50px',
+                              fontSize: '1.2rem',
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main'
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main',
+                                borderWidth: '2px'
+                              }
+                            }
+                          }}
+                        />
+                      </Box>
+                    </Grid>
+
+                    {/* RPE */}
+                    <Grid item xs={2}>
+                      <TextField
+                        select
+                        value={set.rpe || ''}
+                        onChange={(e) => updateSet(exerciseIndex, setIndex, 'rpe', e.target.value)}
+                        placeholder="RPE"
+                        fullWidth
+                        SelectProps={{
+                          displayEmpty: true,
+                          renderValue: (value) => value || 'RPE'
+                        }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: '#0a0a0a',
+                            height: '56px',
+                            fontSize: '1rem',
+                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main'
+                            }
                           }
-                        },
-                        '& input': {
-                          textAlign: 'center',
-                          fontWeight: 600
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <TextField
-                      size="medium"
-                      type="number"
-                      value={set.reps}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
-                      placeholder="Reps"
-                      fullWidth
-                      inputProps={{
-                        style: {
-                          fontSize: { xs: '1.1rem', sm: '1rem' },
-                          textAlign: 'center',
-                          fontWeight: 600
-                        },
-                        inputMode: 'numeric',
-                        pattern: '[0-9]*'
-                      }}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          backgroundColor: '#0a0a0a',
-                          height: { xs: '48px', sm: '40px' },
-                          fontSize: { xs: '1.1rem', sm: '1rem' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main'
-                          },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main',
-                            borderWidth: '2px'
-                          }
-                        },
-                        '& input': {
-                          textAlign: 'center',
-                          fontWeight: 600
-                        }
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <Button
-                      variant={set.completed ? "contained" : "outlined"}
-                      onClick={() => completeSet(exerciseIndex, setIndex)}
-                      fullWidth
-                      sx={{
-                        height: { xs: '48px', sm: '40px' },
-                        minWidth: 'unset',
-                        fontWeight: 700,
-                        fontSize: { xs: '1.2rem', sm: '1rem' },
-                        background: set.completed ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
-                        color: set.completed ? '#000' : 'primary.main',
-                        border: set.completed ? 'none' : '2px solid',
-                        borderColor: 'primary.main',
-                        '&:hover': {
-                          background: set.completed
-                            ? 'linear-gradient(135deg, #00ff88, #00cc66)'
-                            : 'rgba(255, 68, 68, 0.1)',
+                        }}
+                      >
+                        <MenuItem value="">-</MenuItem>
+                        {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(rpe => (
+                          <MenuItem key={rpe} value={rpe.toString()}>{rpe}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+
+                    {/* Complete Button */}
+                    <Grid item xs={3}>
+                      <Button
+                        variant={set.completed ? "contained" : "outlined"}
+                        onClick={() => completeSet(exerciseIndex, setIndex)}
+                        fullWidth
+                        sx={{
+                          height: '56px',
+                          minWidth: 'unset',
+                          fontWeight: 900,
+                          fontSize: '1.1rem',
+                          background: set.completed ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
+                          color: set.completed ? '#000' : 'primary.main',
+                          border: set.completed ? 'none' : '2px solid',
                           borderColor: 'primary.main',
-                          transform: 'scale(1.02)'
-                        },
-                        '&:active': {
-                          transform: 'scale(0.98)'
-                        },
-                        transition: 'all 0.1s ease'
-                      }}
-                    >
-                      {set.completed ? '✅' : '⭕'}
-                    </Button>
+                          borderRadius: 2,
+                          textTransform: 'uppercase',
+                          letterSpacing: 1,
+                          '&:hover': {
+                            background: set.completed
+                              ? 'linear-gradient(135deg, #00ff88, #00cc66)'
+                              : 'rgba(255, 68, 68, 0.1)',
+                            borderColor: 'primary.main',
+                            transform: 'scale(1.02)',
+                            boxShadow: '0 4px 20px rgba(255, 68, 68, 0.3)'
+                          },
+                          '&:active': {
+                            transform: 'scale(0.98)'
+                          },
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {set.completed ? '✅ DONE' : '⭕ SET'}
+                      </Button>
+                    </Grid>
                   </Grid>
-                </Grid>
+                </Box>
               ))}
             </Box>
           )}
@@ -898,11 +1130,46 @@ export default function WorkoutPage() {
             WebkitTextFillColor: 'transparent',
             textTransform: 'uppercase',
             letterSpacing: 2,
-            textAlign: 'center'
+            textAlign: 'center',
+            mb: 2
           }}
         >
-          💪 ACTIVE TRAINING SESSION
+          💪 SHTII PLANNER
         </Typography>
+
+        {/* Quick Stats Row */}
+        <Grid container spacing={1} justifyContent="center" sx={{ maxWidth: 600, mx: 'auto' }}>
+          <Grid item xs={4}>
+            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(255, 68, 68, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ff4444', fontSize: '1.2rem' }}>
+                {quickStats.totalWorkouts}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
+                WORKOUTS
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={4}>
+            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(255, 170, 0, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ffaa00', fontSize: '1.2rem' }}>
+                {quickStats.currentStreak}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
+                DAY STREAK
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={4}>
+            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(0, 255, 136, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#00ff88', fontSize: '1.2rem' }}>
+                {quickStats.weeklyProgress}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
+                THIS WEEK
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
       </Paper>
 
       <Container maxWidth="lg">
@@ -1099,6 +1366,24 @@ export default function WorkoutPage() {
               }}
             >
               ⏱️ Rest: {restSettings.duration}s
+            </Button>
+
+            {/* Auto-advance Toggle */}
+            <Button
+              variant={autoAdvanceEnabled ? "contained" : "outlined"}
+              onClick={() => setAutoAdvanceEnabled(!autoAdvanceEnabled)}
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                minWidth: '100px',
+                background: autoAdvanceEnabled ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
+                color: autoAdvanceEnabled ? '#000' : 'primary.main',
+                '&:hover': {
+                  background: autoAdvanceEnabled ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'rgba(255, 68, 68, 0.1)'
+                }
+              }}
+            >
+              🚀 Auto: {autoAdvanceEnabled ? 'ON' : 'OFF'}
             </Button>
           </Box>
         </Paper>

@@ -30,13 +30,11 @@ export default function RootLayout({
     }
   }, []);
 
-  // Memoize navigation routes to prevent recreation on every render
+  // Memoize navigation routes to prevent recreation on every render - Streamlined for mobile
   const navigationRoutes = useMemo(() => [
-    { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
     { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
-    { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
-    { path: '/analytics', label: 'Analytics', icon: <CalendarIcon /> },
-    { path: '/goals-records', label: 'Goals & PRs', icon: <EmojiEventsIcon /> }
+    { path: '/analytics', label: 'Progress', icon: <CalendarIcon /> },
+    { path: '/goals-records', label: 'Records', icon: <EmojiEventsIcon /> }
   ], []);
 
   useEffect(() => {
