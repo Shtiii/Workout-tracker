@@ -106,12 +106,22 @@ export default function WorkoutPage() {
     weeklyProgress: '0/3'
   });
 
+  // Weekly goal settings
+  const [weeklyGoal, setWeeklyGoal] = useState(3);
+  const [weeklyGoalModalOpen, setWeeklyGoalModalOpen] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     fetchPrograms();
     fetchExercises();
-    fetchQuickStats();
+    fetchWeeklyGoal();
   }, []);
+
+  useEffect(() => {
+    if (weeklyGoal > 0) {
+      fetchQuickStats();
+    }
+  }, [weeklyGoal]);
 
   // Screen wake lock management
   useEffect(() => {
@@ -216,6 +226,58 @@ export default function WorkoutPage() {
     }
   };
 
+  const fetchWeeklyGoal = async () => {
+    try {
+      if (!db) return;
+
+      const settingsQuery = query(collection(db, 'settings'));
+      const settingsSnapshot = await getDocs(settingsQuery);
+
+      if (!settingsSnapshot.empty) {
+        const goalDoc = settingsSnapshot.docs.find(doc => doc.data().type === 'weeklyGoal');
+        if (goalDoc) {
+          setWeeklyGoal(goalDoc.data().value);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching weekly goal:', error);
+    }
+  };
+
+  const saveWeeklyGoal = async (newGoal) => {
+    try {
+      if (!db) return;
+
+      const settingsQuery = query(collection(db, 'settings'));
+      const settingsSnapshot = await getDocs(settingsQuery);
+
+      let goalDocId = null;
+      if (!settingsSnapshot.empty) {
+        const goalDoc = settingsSnapshot.docs.find(doc => doc.data().type === 'weeklyGoal');
+        if (goalDoc) {
+          goalDocId = goalDoc.id;
+        }
+      }
+
+      const goalData = {
+        type: 'weeklyGoal',
+        value: newGoal,
+        updatedAt: new Date()
+      };
+
+      if (goalDocId) {
+        await updateDoc(doc(db, 'settings', goalDocId), goalData);
+      } else {
+        await addDoc(collection(db, 'settings'), goalData);
+      }
+
+      setWeeklyGoal(newGoal);
+      fetchQuickStats(); // Refresh stats with new goal
+    } catch (error) {
+      console.error('Error saving weekly goal:', error);
+    }
+  };
+
   const fetchQuickStats = async () => {
     try {
       if (!db) return;
@@ -251,10 +313,10 @@ export default function WorkoutPage() {
         }
       }
 
-      // Calculate weekly progress
+      // Calculate weekly progress with current goal
       const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
       const weekWorkouts = workouts.filter(w => new Date(w.completedAt) >= weekStart).length;
-      const weeklyProgress = `${weekWorkouts}/3`;
+      const weeklyProgress = `${weekWorkouts}/${weeklyGoal}`;
 
       setQuickStats({
         totalWorkouts,
@@ -911,37 +973,57 @@ export default function WorkoutPage() {
                             <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+2.5</Typography>
                           </IconButton>
                         </Box>
-                        <TextField
-                          type="number"
-                          value={set.weight}
-                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
-                          placeholder="kg"
-                          fullWidth
-                          inputProps={{
-                            inputMode: 'decimal',
-                            pattern: '[0-9]*',
-                            style: {
-                              fontSize: '1.2rem',
-                              textAlign: 'center',
-                              fontWeight: 700,
-                              padding: '8px'
-                            }
-                          }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              backgroundColor: '#0a0a0a',
-                              height: '50px',
-                              fontSize: '1.2rem',
-                              '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main'
-                              },
-                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main',
-                                borderWidth: '2px'
+                        <Box sx={{ position: 'relative' }}>
+                          <TextField
+                            type="number"
+                            value={set.weight}
+                            onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
+                            placeholder="kg"
+                            fullWidth
+                            inputProps={{
+                              inputMode: 'decimal',
+                              pattern: '[0-9]*',
+                              style: {
+                                fontSize: '1.2rem',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                padding: '8px'
                               }
-                            }
-                          }}
-                        />
+                            }}
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                backgroundColor: '#0a0a0a',
+                                height: '50px',
+                                fontSize: '1.2rem',
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: 'primary.main'
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: 'primary.main',
+                                  borderWidth: '2px'
+                                }
+                              }
+                            }}
+                          />
+                          {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.weight && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                color: '#666',
+                                fontWeight: 600,
+                                fontSize: '1rem',
+                                pointerEvents: 'none',
+                                opacity: 0.7
+                              }}
+                            >
+                              {exerciseHistory[exercise.name][0].weight}kg
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     </Grid>
 
@@ -976,37 +1058,57 @@ export default function WorkoutPage() {
                             <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+1</Typography>
                           </IconButton>
                         </Box>
-                        <TextField
-                          type="number"
-                          value={set.reps}
-                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
-                          placeholder="reps"
-                          fullWidth
-                          inputProps={{
-                            inputMode: 'numeric',
-                            pattern: '[0-9]*',
-                            style: {
-                              fontSize: '1.2rem',
-                              textAlign: 'center',
-                              fontWeight: 700,
-                              padding: '8px'
-                            }
-                          }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              backgroundColor: '#0a0a0a',
-                              height: '50px',
-                              fontSize: '1.2rem',
-                              '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main'
-                              },
-                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main',
-                                borderWidth: '2px'
+                        <Box sx={{ position: 'relative' }}>
+                          <TextField
+                            type="number"
+                            value={set.reps}
+                            onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
+                            placeholder="reps"
+                            fullWidth
+                            inputProps={{
+                              inputMode: 'numeric',
+                              pattern: '[0-9]*',
+                              style: {
+                                fontSize: '1.2rem',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                padding: '8px'
                               }
-                            }
-                          }}
-                        />
+                            }}
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                backgroundColor: '#0a0a0a',
+                                height: '50px',
+                                fontSize: '1.2rem',
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: 'primary.main'
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: 'primary.main',
+                                  borderWidth: '2px'
+                                }
+                              }
+                            }}
+                          />
+                          {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.reps && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                color: '#666',
+                                fontWeight: 600,
+                                fontSize: '1rem',
+                                pointerEvents: 'none',
+                                opacity: 0.7
+                              }}
+                            >
+                              {exerciseHistory[exercise.name][0].reps}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     </Grid>
 
@@ -1191,17 +1293,27 @@ export default function WorkoutPage() {
             </Box>
           </Grid>
           <Grid item xs={4}>
-            <Box sx={{
-              textAlign: 'center',
-              p: { xs: 1, sm: 1.5 },
-              bgcolor: 'rgba(0, 255, 136, 0.1)',
-              borderRadius: 1,
-              border: '1px solid #333',
-              minHeight: { xs: '50px', sm: '55px' },
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
+            <Box
+              onClick={() => setWeeklyGoalModalOpen(true)}
+              sx={{
+                textAlign: 'center',
+                p: { xs: 1, sm: 1.5 },
+                bgcolor: 'rgba(0, 255, 136, 0.1)',
+                borderRadius: 1,
+                border: '1px solid #333',
+                minHeight: { xs: '50px', sm: '55px' },
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 255, 136, 0.2)',
+                  transform: 'scale(1.05)',
+                  boxShadow: '0 4px 15px rgba(0, 255, 136, 0.3)'
+                }
+              }}
+            >
               <Typography variant="h6" sx={{ fontWeight: 900, color: '#00ff88', fontSize: { xs: '1rem', sm: '1.2rem' }, lineHeight: 1 }}>
                 {quickStats.weeklyProgress}
               </Typography>
@@ -1384,13 +1496,36 @@ export default function WorkoutPage() {
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: 1,
-                flex: { xs: '1 1 100%', sm: '1 1 auto' },
-                minWidth: '140px',
+                flex: { xs: '1 1 50%', sm: '1 1 auto' },
+                minWidth: '120px',
                 height: { xs: '44px', sm: '40px' },
-                fontSize: { xs: '0.85rem', sm: '0.875rem' }
+                fontSize: { xs: '0.8rem', sm: '0.875rem' }
               }}
             >
               Add Exercise
+            </Button>
+
+            {/* Manage Programs Button */}
+            <Button
+              variant="outlined"
+              onClick={() => window.location.href = '/programs'}
+              sx={{
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                flex: { xs: '1 1 50%', sm: '1 1 auto' },
+                minWidth: '120px',
+                height: { xs: '44px', sm: '40px' },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                borderColor: '#ffaa00',
+                color: '#ffaa00',
+                '&:hover': {
+                  borderColor: '#ffaa00',
+                  bgcolor: 'rgba(255, 170, 0, 0.1)'
+                }
+              }}
+            >
+              Programs
             </Button>
 
             {/* Rest Settings Button */}
@@ -1695,6 +1830,79 @@ export default function WorkoutPage() {
                 </Typography>
               </Box>
             )}
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Weekly Goal Modal */}
+      <Modal
+        open={weeklyGoalModalOpen}
+        onClose={() => setWeeklyGoalModalOpen(false)}
+        aria-labelledby="weekly-goal-modal"
+      >
+        <Box sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: { xs: '90vw', sm: 400 },
+          maxWidth: '400px',
+          bgcolor: '#1a1a1a',
+          border: '2px solid #ff4444',
+          boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+          p: 4,
+          borderRadius: 2
+        }}>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+            SET WEEKLY GOAL
+          </Typography>
+
+          <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary', textAlign: 'center' }}>
+            How many workouts do you want to complete each week?
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, mb: 4, justifyContent: 'center' }}>
+            {[1, 2, 3, 4, 5, 6, 7].map(goal => (
+              <Button
+                key={goal}
+                variant={weeklyGoal === goal ? "contained" : "outlined"}
+                onClick={() => setWeeklyGoal(goal)}
+                sx={{
+                  minWidth: '40px',
+                  height: '40px',
+                  p: 0,
+                  fontWeight: 700,
+                  background: weeklyGoal === goal ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
+                  color: weeklyGoal === goal ? '#000' : 'primary.main'
+                }}
+              >
+                {goal}
+              </Button>
+            ))}
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              onClick={() => setWeeklyGoalModalOpen(false)}
+              variant="outlined"
+              fullWidth
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                saveWeeklyGoal(weeklyGoal);
+                setWeeklyGoalModalOpen(false);
+              }}
+              variant="contained"
+              fullWidth
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700
+              }}
+            >
+              Save Goal
+            </Button>
           </Box>
         </Box>
       </Modal>

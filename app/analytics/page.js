@@ -15,11 +15,16 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  CircularProgress
+  CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton
 } from '@mui/material';
-// import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -48,6 +53,7 @@ export default function AnalyticsPage() {
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedExercise, setSelectedExercise] = useState('all');
   const [exerciseList, setExerciseList] = useState([]);
+  const [allWorkouts, setAllWorkouts] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -94,6 +100,7 @@ export default function AnalyticsPage() {
       }).filter(Boolean); // Remove null entries
 
       setWorkouts(workoutsData);
+      setAllWorkouts(workoutsData);
 
       // Fetch programs
       const programsSnapshot = await getDocs(collection(db, 'programs'));
@@ -116,6 +123,19 @@ export default function AnalyticsPage() {
       setError(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteWorkout = async (workoutId) => {
+    if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+      try {
+        await deleteDoc(doc(db, 'workoutSessions', workoutId));
+        // Refresh data
+        await fetchData();
+      } catch (error) {
+        console.error('Error deleting workout:', error);
+        alert('Error deleting workout. Please try again.');
+      }
     }
   };
 
@@ -680,6 +700,147 @@ export default function AnalyticsPage() {
     );
   };
 
+  const HistoryView = () => {
+    const sortedWorkouts = [...allWorkouts].sort((a, b) => b.completedAt - a.completedAt);
+
+    if (sortedWorkouts.length === 0) {
+      return (
+        <Paper
+          sx={{
+            background: 'rgba(26, 26, 26, 0.5)',
+            border: '1px solid #333',
+            p: 4,
+            textAlign: 'center'
+          }}
+        >
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            No workout history found
+          </Typography>
+          <Typography color="text.secondary">
+            Complete some workouts to see your history here!
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <Paper
+        sx={{
+          background: '#1a1a1a',
+          border: '1px solid #333',
+          p: 3
+        }}
+      >
+        <Typography
+          variant="h6"
+          sx={{
+            mb: 3,
+            fontWeight: 700,
+            textAlign: 'center',
+            fontSize: { xs: '1.1rem', sm: '1.25rem' },
+            lineHeight: 1.2
+          }}
+        >
+          WORKOUT HISTORY
+        </Typography>
+
+        <List>
+          {sortedWorkouts.map((workout, index) => (
+            <motion.div
+              key={workout.id}
+              whileHover={{ x: 5 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ListItem
+                sx={{
+                  bgcolor: 'rgba(26, 26, 26, 0.5)',
+                  border: '1px solid #333',
+                  borderRadius: 1,
+                  mb: 2,
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    bgcolor: 'rgba(255, 68, 68, 0.05)'
+                  }
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {workout.programName || 'Custom Workout'}
+                      </Typography>
+                      <Typography variant="caption" sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.75rem',
+                        bgcolor: 'rgba(255, 68, 68, 0.1)',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1
+                      }}>
+                        {workout.completedAt.toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        })}
+                      </Typography>
+                    </Box>
+                  }
+                  secondary={
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Duration: {Math.round((workout.endTime?.toDate() - workout.startTime?.toDate()) / (1000 * 60))} min |
+                        Exercises: {workout.exercises?.length || 0}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {workout.exercises?.slice(0, 3).map((exercise, idx) => (
+                          <Typography
+                            key={idx}
+                            variant="caption"
+                            sx={{
+                              bgcolor: 'rgba(255, 170, 0, 0.1)',
+                              color: '#ffaa00',
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontSize: '0.7rem'
+                            }}
+                          >
+                            {exercise.name}
+                          </Typography>
+                        ))}
+                        {workout.exercises?.length > 3 && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: 'text.secondary',
+                              fontStyle: 'italic'
+                            }}
+                          >
+                            +{workout.exercises.length - 3} more
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  }
+                />
+                <ListItemSecondaryAction>
+                  <IconButton
+                    edge="end"
+                    onClick={() => deleteWorkout(workout.id)}
+                    sx={{ color: '#ff4444' }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              </ListItem>
+            </motion.div>
+          ))}
+        </List>
+      </Paper>
+    );
+  };
+
   if (loading) {
     return (
       <Box
@@ -790,6 +951,7 @@ export default function AnalyticsPage() {
           >
             <Tab label="Calendar" />
             <Tab label="Progress" />
+            <Tab label="History" />
           </Tabs>
 
           <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
@@ -802,6 +964,9 @@ export default function AnalyticsPage() {
             </ErrorBoundary>
             <ErrorBoundary fallbackMessage="Progress charts failed to load. Please check your workout data and try again.">
               {activeTab === 1 && <ProgressView />}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackMessage="Workout history failed to load. Please refresh the page and try again.">
+              {activeTab === 2 && <HistoryView />}
             </ErrorBoundary>
           </Box>
         </Paper>
