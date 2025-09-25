@@ -56,6 +56,7 @@ export default function ProgramsPage() {
     exercises: [{ name: '', sets: 3, reps: 10 }]
   });
 
+
   const fetchPrograms = useCallback(async () => {
     try {
       console.log('Fetching programs...');
@@ -83,6 +84,8 @@ export default function ProgramsPage() {
         errorMessage = 'Firebase service unavailable. Check your internet connection.';
       } else if (error.message.includes('Missing or insufficient permissions')) {
         errorMessage = 'Firestore permissions error. Check your security rules.';
+      } else if (error.message.includes('Firebase not initialized')) {
+        errorMessage = 'Firebase is not properly configured. Please check your environment variables.';
       }
 
       showSnackbar(errorMessage, 'error');
@@ -104,19 +107,22 @@ export default function ProgramsPage() {
   };
 
   const handleOpenModal = (program = null) => {
-    if (program) {
+    // Force complete state reset first
+    setEditingProgram(null);
+    setNewProgram({
+      name: '',
+      exercises: [{ name: '', sets: 3, reps: 10 }]
+    });
+
+    // Then set the appropriate state
+    if (program && program.id) {
       setEditingProgram(program);
       setNewProgram({
         name: program.name || '',
         exercises: program.exercises || [{ name: '', sets: 3, reps: 10 }]
       });
-    } else {
-      setEditingProgram(null);
-      setNewProgram({
-        name: '',
-        exercises: [{ name: '', sets: 3, reps: 10 }]
-      });
     }
+
     setModalOpen(true);
   };
 
@@ -154,7 +160,12 @@ export default function ProgramsPage() {
   };
 
   const saveProgram = async () => {
-    console.log('Attempting to save program:', newProgram);
+    // Check if Firebase is available
+    if (!db) {
+      showSnackbar('Firebase is not properly configured. Please check your environment variables and try again.', 'error');
+      return;
+    }
+
 
     // Validation
     if (!newProgram?.name?.trim()) {
@@ -165,6 +176,7 @@ export default function ProgramsPage() {
     const validExercises = (newProgram?.exercises || []).filter(exercise =>
       exercise && typeof exercise.name === 'string' && exercise.name.trim() !== ''
     );
+
     if (validExercises.length === 0) {
       showSnackbar('Please add at least one exercise with a name', 'error');
       return;
@@ -172,42 +184,48 @@ export default function ProgramsPage() {
 
     try {
       setLoading(true);
-      console.log('Saving to Firestore...');
 
       const programData = {
         name: newProgram?.name?.trim() || '',
         exercises: validExercises.map(ex => ({
           name: (ex && typeof ex.name === 'string') ? ex.name.trim() : '',
-          sets: parseInt(ex?.sets) || 3,
-          reps: parseInt(ex?.reps) || 10
+          sets: parseInt(ex?.sets || '3') || 3,
+          reps: parseInt(ex?.reps || '10') || 10
         })),
         updatedAt: new Date()
       };
 
-      if (editingProgram) {
-        // Update existing program
+      // Force create new program if no valid ID exists
+      const isValidUpdate = editingProgram && editingProgram.id && typeof editingProgram.id === 'string' && editingProgram.id.length > 0;
+
+      if (isValidUpdate) {
+        // Update existing program - only if we have a valid ID
         programData.createdAt = editingProgram.createdAt || new Date();
         await updateDoc(doc(db, 'programs', editingProgram.id), programData);
-        console.log('Program updated with ID:', editingProgram.id);
         showSnackbar('Program updated successfully!', 'success');
       } else {
-        // Create new program
+        // Create new program - either editingProgram is null, has no ID, or invalid ID
         programData.createdAt = new Date();
         const docRef = await addDoc(collection(db, 'programs'), programData);
-        console.log('Program saved with ID:', docRef.id);
         showSnackbar('Program created successfully!', 'success');
       }
+
       fetchPrograms(); // Refresh the list
       handleCloseModal();
     } catch (error) {
-      console.error('Error saving program:', error);
-      showSnackbar('Error saving program: ' + error.message, 'error');
+      const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+      showSnackbar('Error saving program: ' + errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const deleteProgram = async (programId) => {
+    if (!db) {
+      showSnackbar('Firebase is not properly configured. Please check your environment variables and try again.', 'error');
+      return;
+    }
+
     if (confirm('Are you sure you want to delete this program?')) {
       try {
         await deleteDoc(doc(db, 'programs', programId));
@@ -421,7 +439,18 @@ export default function ProgramsPage() {
             <Button
               variant="contained"
               onClick={saveProgram}
-              disabled={loading || !newProgram?.name?.trim() || !(newProgram?.exercises || []).every(ex => ex?.name?.trim?.() !== '')}
+              disabled={
+                loading ||
+                !newProgram?.name?.trim() ||
+                !(newProgram?.exercises || []).every(ex => {
+                  try {
+                    return ex && typeof ex.name === 'string' && ex.name.trim() !== '';
+                  } catch (err) {
+                    console.warn('Button validation error for exercise:', ex, err);
+                    return false;
+                  }
+                })
+              }
             >
               {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Save Program'}
             </Button>
