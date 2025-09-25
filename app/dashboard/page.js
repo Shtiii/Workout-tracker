@@ -71,15 +71,33 @@ export default function DashboardPage() {
 
   const fetchWeeklyGoal = useCallback(async () => {
     try {
+      if (!db) {
+        console.warn('Firebase not available for fetching weekly goal');
+        return;
+      }
+
       const goalDoc = await getDocs(query(collection(db, 'settings')));
       const settings = goalDoc.docs.find(doc => doc.id === 'weeklyGoal');
       if (settings) {
         const target = settings.data().target || 3;
+        console.log('Fetched weekly goal from Firebase:', target);
         setWeeklyGoalTarget(target);
         setNewGoalTarget(target);
+      } else {
+        console.log('No weekly goal found in Firebase, using default value: 3');
+        // Create default weekly goal if it doesn't exist
+        await setDoc(doc(db, 'settings', 'weeklyGoal'), {
+          target: 3,
+          updatedAt: new Date()
+        });
+        setWeeklyGoalTarget(3);
+        setNewGoalTarget(3);
       }
     } catch (error) {
       console.error('Error fetching weekly goal:', error);
+      // Use default value on error
+      setWeeklyGoalTarget(3);
+      setNewGoalTarget(3);
     }
   }, []);
 
@@ -374,20 +392,35 @@ export default function DashboardPage() {
 
     try {
       const goalTarget = parseInt(newGoalTarget);
+      console.log('Saving weekly goal:', goalTarget);
 
+      // Check if Firebase is available
+      if (!db) {
+        throw new Error('Firebase not initialized');
+      }
+
+      // Save to Firebase
       await setDoc(doc(db, 'settings', 'weeklyGoal'), {
         target: goalTarget,
         updatedAt: new Date()
-      });
+      }, { merge: true });
 
+      console.log('Firebase save successful');
+
+      // Update local state
       setWeeklyGoalTarget(goalTarget);
-      setSnackbar({ open: true, message: 'Weekly goal updated! 🎯', severity: 'success' });
       setGoalModalOpen(false);
 
-      // Recalculate stats with new goal
-      if (workouts.length > 0) {
-        calculateStats(workouts, goalTarget);
-      }
+      // Recalculate stats with new goal immediately
+      const weeklyGoal = calculateWeeklyProgress(workouts, goalTarget);
+      setStats(prevStats => ({
+        ...prevStats,
+        weeklyGoal
+      }));
+
+      setSnackbar({ open: true, message: 'Weekly goal updated! 🎯', severity: 'success' });
+      console.log('Weekly goal updated successfully to:', goalTarget);
+
     } catch (error) {
       console.error('Error saving weekly goal:', error);
       setSnackbar({ open: true, message: `Error saving goal: ${error.message}`, severity: 'error' });

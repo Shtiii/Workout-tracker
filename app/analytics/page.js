@@ -279,10 +279,13 @@ export default function AnalyticsPage() {
             <Grid item xs key={day} sx={{ p: { xs: 0.5, sm: 0.75 } }}>
               <Box sx={{
                 textAlign: 'center',
-                height: { xs: 35, sm: 40 },
+                height: { xs: 45, sm: 50, md: 55 }, // Match day cell heights exactly
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                borderRadius: 2, // Match day cell border radius for perfect alignment
+                minHeight: { xs: 45, sm: 50, md: 55 }, // Match day cell minimum heights
+                minWidth: { xs: 45, sm: 50, md: 55 } // Match day cell minimum widths exactly
               }}>
                 <Typography
                   variant="body2"
