@@ -162,7 +162,9 @@ export default function ProgramsPage() {
       return;
     }
 
-    const validExercises = newProgram?.exercises?.filter(exercise => exercise?.name?.trim() !== '') || [];
+    const validExercises = (newProgram?.exercises || []).filter(exercise =>
+      exercise && typeof exercise.name === 'string' && exercise.name.trim() !== ''
+    );
     if (validExercises.length === 0) {
       showSnackbar('Please add at least one exercise with a name', 'error');
       return;
@@ -175,9 +177,9 @@ export default function ProgramsPage() {
       const programData = {
         name: newProgram?.name?.trim() || '',
         exercises: validExercises.map(ex => ({
-          name: ex?.name?.trim() || '',
-          sets: parseInt(ex.sets) || 3,
-          reps: parseInt(ex.reps) || 10
+          name: (ex && typeof ex.name === 'string') ? ex.name.trim() : '',
+          sets: parseInt(ex?.sets) || 3,
+          reps: parseInt(ex?.reps) || 10
         })),
         updatedAt: new Date()
       };
