@@ -745,7 +745,7 @@ export default function AnalyticsPage() {
         </Typography>
 
         <List>
-          {sortedWorkouts.map((workout, index) => (
+          {sortedWorkouts.map((workout) => (
             <motion.div
               key={workout.id}
               whileHover={{ x: 5 }}

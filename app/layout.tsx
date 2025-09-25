@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Box, Paper, BottomNavigation, BottomNavigationAction } from '@mui/material';
-import { FitnessCenter as FitnessCenterIcon, ViewList as ViewListIcon, EmojiEvents as EmojiEventsIcon, Dashboard as DashboardIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
+import { FitnessCenter as FitnessCenterIcon, EmojiEvents as EmojiEventsIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import ThemeRegistry from './theme/ThemeRegistry';
 import "./globals.css";

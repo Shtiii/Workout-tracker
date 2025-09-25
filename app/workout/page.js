@@ -21,14 +21,10 @@ import {
   IconButton,
   Chip,
   Modal,
-  Checkbox,
-  FormControlLabel
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon,
-  Stop as StopIcon,
   Delete as DeleteIcon,
   KeyboardArrowUp as ArrowUpIcon,
   KeyboardArrowDown as ArrowDownIcon,
@@ -86,7 +82,6 @@ export default function WorkoutPage() {
     startTime: null
   });
 
-  const [mounted, setMounted] = useState(false);
 
   const [activeWorkout, setActiveWorkout] = useState({
     programId: '',
@@ -190,10 +185,9 @@ export default function WorkoutPage() {
     }, 2000); // Auto-save after 2 seconds of inactivity
 
     return () => clearTimeout(autoSaveTimer);
-  }, [activeWorkout]);
+  }, [activeWorkout, saveDraftWorkout]);
 
   useEffect(() => {
-    setMounted(true);
     fetchPrograms();
     fetchExercises();
     fetchWeeklyGoal();
@@ -209,7 +203,7 @@ export default function WorkoutPage() {
     if (weeklyGoal > 0) {
       fetchQuickStats();
     }
-  }, [weeklyGoal]);
+  }, [weeklyGoal, fetchQuickStats]);
 
   // Screen wake lock management
   useEffect(() => {
@@ -519,27 +513,6 @@ export default function WorkoutPage() {
     }
   };
 
-  const formatTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const startTimer = () => {
-    setTimer(prev => ({
-      ...prev,
-      isRunning: true,
-      startTime: Date.now() - (prev.time * 1000)
-    }));
-    if (!activeWorkout.startTime) {
-      setActiveWorkout(prev => ({ ...prev, startTime: new Date() }));
-    }
-  };
-
-  const pauseTimer = () => {
-    setTimer(prev => ({ ...prev, isRunning: false }));
-  };
 
   const stopTimer = () => {
     setTimer({ time: 0, isRunning: false, startTime: null });
@@ -614,20 +587,6 @@ export default function WorkoutPage() {
     setActiveWorkout(updatedWorkout);
   };
 
-  // Quick increment/decrement functions for mobile optimization
-  const adjustWeight = (exerciseIndex, setIndex, increment) => {
-    const currentSet = activeWorkout.exercises[exerciseIndex].sets[setIndex];
-    const currentWeight = parseFloat(currentSet.weight) || 0;
-    const newWeight = Math.max(0, currentWeight + increment);
-    updateSet(exerciseIndex, setIndex, 'weight', newWeight.toString());
-  };
-
-  const adjustReps = (exerciseIndex, setIndex, increment) => {
-    const currentSet = activeWorkout.exercises[exerciseIndex].sets[setIndex];
-    const currentReps = parseInt(currentSet.reps) || 0;
-    const newReps = Math.max(0, currentReps + increment);
-    updateSet(exerciseIndex, setIndex, 'reps', newReps.toString());
-  };
 
   const completeSet = (exerciseIndex, setIndex) => {
     const updatedWorkout = { ...activeWorkout };
@@ -1767,7 +1726,7 @@ export default function WorkoutPage() {
               Recent Workouts
             </Typography>
             <Grid container spacing={2}>
-              {recentWorkouts.map((workout, index) => (
+              {recentWorkouts.map((workout) => (
                 <Grid item xs={12} key={workout.id}>
                   <Card
                     onClick={() => {

@@ -58,6 +58,12 @@ export default function ProgramsPage() {
   const fetchPrograms = useCallback(async () => {
     try {
       console.log('Fetching programs...');
+
+      // Check if Firebase is initialized
+      if (!db) {
+        throw new Error('Firebase not initialized. Check your environment variables.');
+      }
+
       const querySnapshot = await getDocs(collection(db, 'programs'));
       const programsData = [];
       querySnapshot.forEach((doc) => {
@@ -67,7 +73,20 @@ export default function ProgramsPage() {
       setPrograms(programsData);
     } catch (error) {
       console.error('Error fetching programs:', error);
-      showSnackbar('Error fetching programs: ' + error.message, 'error');
+
+      // More detailed error message
+      let errorMessage = 'Error fetching programs: ' + error.message;
+      if (error.code === 'permission-denied') {
+        errorMessage = 'Permission denied. Check your Firestore security rules.';
+      } else if (error.code === 'unavailable') {
+        errorMessage = 'Firebase service unavailable. Check your internet connection.';
+      } else if (error.message.includes('Missing or insufficient permissions')) {
+        errorMessage = 'Firestore permissions error. Check your security rules.';
+      }
+
+      showSnackbar(errorMessage, 'error');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
