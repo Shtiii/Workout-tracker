@@ -772,8 +772,17 @@ export default function WorkoutPage() {
         }}
       >
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                lineHeight: 1.2,
+                flex: '1 1 auto',
+                minWidth: 0
+              }}
+            >
               {exercise.name}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
@@ -1121,51 +1130,83 @@ export default function WorkoutPage() {
         }}
       >
         <Typography
-          variant="h4"
+          variant="h5"
           sx={{
-            fontWeight: 900,
+            fontWeight: 800,
             background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             textTransform: 'uppercase',
-            letterSpacing: 2,
+            letterSpacing: 1,
             textAlign: 'center',
-            mb: 2
+            mb: 2,
+            fontSize: { xs: '1.4rem', sm: '1.5rem' },
+            lineHeight: 1.2
           }}
         >
-          💪 SHTII PLANNER
+          SHTII PLANNER
         </Typography>
 
         {/* Quick Stats Row */}
-        <Grid container spacing={1} justifyContent="center" sx={{ maxWidth: 600, mx: 'auto' }}>
+        <Grid container spacing={1} justifyContent="center" sx={{ maxWidth: 500, mx: 'auto' }}>
           <Grid item xs={4}>
-            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(255, 68, 68, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ff4444', fontSize: '1.2rem' }}>
+            <Box sx={{
+              textAlign: 'center',
+              p: { xs: 1, sm: 1.5 },
+              bgcolor: 'rgba(255, 68, 68, 0.1)',
+              borderRadius: 1,
+              border: '1px solid #333',
+              minHeight: { xs: '50px', sm: '55px' },
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ff4444', fontSize: { xs: '1rem', sm: '1.2rem' }, lineHeight: 1 }}>
                 {quickStats.totalWorkouts}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: { xs: '0.65rem', sm: '0.7rem' }, mt: 0.5 }}>
                 WORKOUTS
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={4}>
-            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(255, 170, 0, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ffaa00', fontSize: '1.2rem' }}>
+            <Box sx={{
+              textAlign: 'center',
+              p: { xs: 1, sm: 1.5 },
+              bgcolor: 'rgba(255, 170, 0, 0.1)',
+              borderRadius: 1,
+              border: '1px solid #333',
+              minHeight: { xs: '50px', sm: '55px' },
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#ffaa00', fontSize: { xs: '1rem', sm: '1.2rem' }, lineHeight: 1 }}>
                 {quickStats.currentStreak}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-                DAY STREAK
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: { xs: '0.65rem', sm: '0.7rem' }, mt: 0.5 }}>
+                STREAK
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={4}>
-            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(0, 255, 136, 0.1)', borderRadius: 1, border: '1px solid #333' }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: '#00ff88', fontSize: '1.2rem' }}>
+            <Box sx={{
+              textAlign: 'center',
+              p: { xs: 1, sm: 1.5 },
+              bgcolor: 'rgba(0, 255, 136, 0.1)',
+              borderRadius: 1,
+              border: '1px solid #333',
+              minHeight: { xs: '50px', sm: '55px' },
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, color: '#00ff88', fontSize: { xs: '1rem', sm: '1.2rem' }, lineHeight: 1 }}>
                 {quickStats.weeklyProgress}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-                THIS WEEK
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: { xs: '0.65rem', sm: '0.7rem' }, mt: 0.5 }}>
+                WEEKLY
               </Typography>
             </Box>
           </Grid>
@@ -1334,7 +1375,7 @@ export default function WorkoutPage() {
             </Select>
           </FormControl>
 
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button
               variant="outlined"
               startIcon={<AddIcon />}
@@ -1343,8 +1384,10 @@ export default function WorkoutPage() {
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: 1,
-                flex: 1,
-                minWidth: '140px'
+                flex: { xs: '1 1 100%', sm: '1 1 auto' },
+                minWidth: '140px',
+                height: { xs: '44px', sm: '40px' },
+                fontSize: { xs: '0.85rem', sm: '0.875rem' }
               }}
             >
               Add Exercise
@@ -1361,11 +1404,12 @@ export default function WorkoutPage() {
               }}
               sx={{
                 fontWeight: 600,
-                fontSize: '0.8rem',
-                minWidth: '100px'
+                fontSize: { xs: '0.75rem', sm: '0.8rem' },
+                minWidth: { xs: '90px', sm: '100px' },
+                height: { xs: '36px', sm: '40px' }
               }}
             >
-              ⏱️ Rest: {restSettings.duration}s
+              Rest: {restSettings.duration}s
             </Button>
 
             {/* Auto-advance Toggle */}
@@ -1374,8 +1418,9 @@ export default function WorkoutPage() {
               onClick={() => setAutoAdvanceEnabled(!autoAdvanceEnabled)}
               sx={{
                 fontWeight: 600,
-                fontSize: '0.8rem',
-                minWidth: '100px',
+                fontSize: { xs: '0.75rem', sm: '0.8rem' },
+                minWidth: { xs: '80px', sm: '100px' },
+                height: { xs: '36px', sm: '40px' },
                 background: autoAdvanceEnabled ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
                 color: autoAdvanceEnabled ? '#000' : 'primary.main',
                 '&:hover': {
@@ -1383,7 +1428,7 @@ export default function WorkoutPage() {
                 }
               }}
             >
-              🚀 Auto: {autoAdvanceEnabled ? 'ON' : 'OFF'}
+              Auto: {autoAdvanceEnabled ? 'ON' : 'OFF'}
             </Button>
           </Box>
         </Paper>
@@ -1449,8 +1494,22 @@ export default function WorkoutPage() {
               mb: 3
             }}
           >
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
-              🔥 EXERCISES
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 3,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                lineHeight: 1.2,
+                textAlign: 'center',
+                background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}
+            >
+              EXERCISES
             </Typography>
             {activeWorkout.exercises.map((exercise, index) => (
               <ExerciseCard key={index} exercise={exercise} exerciseIndex={index} />

@@ -561,18 +561,20 @@ export default function GoalsRecordsPage() {
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <Typography
-            variant="h4"
+            variant="h5"
             sx={{
-              fontWeight: 900,
+              fontWeight: 800,
               background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               textTransform: 'uppercase',
-              letterSpacing: 2
+              letterSpacing: 1,
+              fontSize: { xs: '1.4rem', sm: '1.5rem' },
+              lineHeight: 1.2
             }}
           >
-            🎯 GOALS & RECORDS 💪
+            GOALS & RECORDS
           </Typography>
           <Button
             variant="contained"
@@ -611,8 +613,8 @@ export default function GoalsRecordsPage() {
               }
             }}
           >
-            <Tab label="🎯 Goals" />
-            <Tab label="💪 Personal Records" />
+            <Tab label="Goals" />
+            <Tab label="Personal Records" />
           </Tabs>
 
           <Box sx={{ p: 3 }}>

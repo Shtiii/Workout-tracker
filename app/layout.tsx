@@ -91,8 +91,8 @@ export default function RootLayout({
                 bottom: 0,
                 left: 0,
                 right: 0,
-                bgcolor: 'rgba(26, 26, 26, 0.95)',
-                backdropFilter: 'blur(10px)',
+                bgcolor: 'rgba(26, 26, 26, 0.7)',
+                backdropFilter: 'blur(20px)',
                 borderTop: '1px solid #333',
                 // iPhone safe area handling
                 paddingBottom: 'env(safe-area-inset-bottom)',

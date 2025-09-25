@@ -421,8 +421,17 @@ export default function AnalyticsPage() {
               mb: 3
             }}
           >
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
-              📈 STRENGTH PROGRESSION
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 3,
+                fontWeight: 700,
+                textAlign: 'center',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                lineHeight: 1.2
+              }}
+            >
+              STRENGTH PROGRESSION
             </Typography>
             <Grid container spacing={3}>
               {chartData.map((exercise) => (
@@ -511,8 +520,17 @@ export default function AnalyticsPage() {
             p: 3
           }}
         >
-          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
-            📊 DETAILED PROGRESS
+          <Typography
+            variant="h6"
+            sx={{
+              mb: 3,
+              fontWeight: 700,
+              textAlign: 'center',
+              fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              lineHeight: 1.2
+            }}
+          >
+            DETAILED PROGRESS
           </Typography>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -731,19 +749,21 @@ export default function AnalyticsPage() {
         }}
       >
         <Typography
-          variant="h4"
+          variant="h5"
           sx={{
-            fontWeight: 900,
+            fontWeight: 800,
             background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             textTransform: 'uppercase',
-            letterSpacing: 2,
-            textAlign: 'center'
+            letterSpacing: 1,
+            textAlign: 'center',
+            fontSize: { xs: '1.4rem', sm: '1.5rem' },
+            lineHeight: 1.2
           }}
         >
-          📊 ANALYTICS
+          ANALYTICS
         </Typography>
       </Paper>
 
@@ -768,8 +788,8 @@ export default function AnalyticsPage() {
               }
             }}
           >
-            <Tab label="📅 Calendar" />
-            <Tab label="📈 Progress" />
+            <Tab label="Calendar" />
+            <Tab label="Progress" />
           </Tabs>
 
           <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
