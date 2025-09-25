@@ -22,34 +22,11 @@ const nextConfig = {
         fs: false,
       };
 
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all',
-            priority: 10,
-          },
-          mui: {
-            test: /[\\/]node_modules[\\/](@mui)[\\/]/,
-            name: 'mui',
-            chunks: 'all',
-            priority: 20,
-          },
-          firebase: {
-            test: /[\\/]node_modules[\\/](firebase)[\\/]/,
-            name: 'firebase',
-            chunks: 'all',
-            priority: 20,
-          },
-          charts: {
-            test: /[\\/]node_modules[\\/](chart\.js|react-chartjs-2)[\\/]/,
-            name: 'charts',
-            chunks: 'all',
-            priority: 15,
-          },
-        },
+      // Fix module resolution for dynamic imports
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'react-chartjs-2': require.resolve('react-chartjs-2'),
+        'chart.js': require.resolve('chart.js'),
       };
     }
     return config;

@@ -205,6 +205,56 @@ export default function WorkoutPage() {
     }
   }, []);
 
+  const fetchQuickStats = useCallback(async () => {
+    try {
+      if (!db) return;
+
+      const workoutsQuery = query(
+        collection(db, 'workoutSessions'),
+        orderBy('completedAt', 'desc')
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const workouts = workoutsSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        completedAt: doc.data().completedAt?.toDate() || new Date()
+      }));
+
+      // Calculate stats
+      const totalWorkouts = workouts.length;
+
+      // Calculate current streak
+      let currentStreak = 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < workouts.length; i++) {
+        const workoutDate = new Date(workouts[i].completedAt);
+        workoutDate.setHours(0, 0, 0, 0);
+
+        const daysDiff = Math.floor((today - workoutDate) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff === i) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+
+      // Calculate weekly progress with current goal
+      const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+      const weekWorkouts = workouts.filter(w => new Date(w.completedAt) >= weekStart).length;
+      const weeklyProgress = `${weekWorkouts}/${weeklyGoal}`;
+
+      setQuickStats({
+        totalWorkouts,
+        currentStreak,
+        weeklyProgress
+      });
+    } catch (error) {
+      console.error('Error fetching quick stats:', error);
+    }
+  }, [weeklyGoal]);
+
   useEffect(() => {
     if (weeklyGoal > 0) {
       fetchQuickStats();
@@ -388,55 +438,6 @@ export default function WorkoutPage() {
     }
   };
 
-  const fetchQuickStats = useCallback(async () => {
-    try {
-      if (!db) return;
-
-      const workoutsQuery = query(
-        collection(db, 'workoutSessions'),
-        orderBy('completedAt', 'desc')
-      );
-      const workoutsSnapshot = await getDocs(workoutsQuery);
-      const workouts = workoutsSnapshot.docs.map(doc => ({
-        ...doc.data(),
-        completedAt: doc.data().completedAt?.toDate() || new Date()
-      }));
-
-      // Calculate stats
-      const totalWorkouts = workouts.length;
-
-      // Calculate current streak
-      let currentStreak = 0;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      for (let i = 0; i < workouts.length; i++) {
-        const workoutDate = new Date(workouts[i].completedAt);
-        workoutDate.setHours(0, 0, 0, 0);
-
-        const daysDiff = Math.floor((today - workoutDate) / (1000 * 60 * 60 * 24));
-
-        if (daysDiff === i) {
-          currentStreak++;
-        } else {
-          break;
-        }
-      }
-
-      // Calculate weekly progress with current goal
-      const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
-      const weekWorkouts = workouts.filter(w => new Date(w.completedAt) >= weekStart).length;
-      const weeklyProgress = `${weekWorkouts}/${weeklyGoal}`;
-
-      setQuickStats({
-        totalWorkouts,
-        currentStreak,
-        weeklyProgress
-      });
-    } catch (error) {
-      console.error('Error fetching quick stats:', error);
-    }
-  }, [weeklyGoal]);
 
   const fetchExercises = async () => {
     // Comprehensive exercise database

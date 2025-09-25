@@ -21,7 +21,8 @@ import {
   Divider,
   Chip,
   Alert,
-  Snackbar
+  Snackbar,
+  CircularProgress
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -106,7 +107,7 @@ export default function ProgramsPage() {
     if (program) {
       setEditingProgram(program);
       setNewProgram({
-        name: program.name,
+        name: program.name || '',
         exercises: program.exercises || [{ name: '', sets: 3, reps: 10 }]
       });
     } else {
@@ -156,12 +157,12 @@ export default function ProgramsPage() {
     console.log('Attempting to save program:', newProgram);
 
     // Validation
-    if (!newProgram.name.trim()) {
+    if (!newProgram?.name?.trim()) {
       showSnackbar('Please enter a program name', 'error');
       return;
     }
 
-    const validExercises = newProgram.exercises.filter(exercise => exercise.name.trim() !== '');
+    const validExercises = newProgram?.exercises?.filter(exercise => exercise?.name?.trim() !== '') || [];
     if (validExercises.length === 0) {
       showSnackbar('Please add at least one exercise with a name', 'error');
       return;
@@ -172,9 +173,9 @@ export default function ProgramsPage() {
       console.log('Saving to Firestore...');
 
       const programData = {
-        name: newProgram.name.trim(),
+        name: newProgram?.name?.trim() || '',
         exercises: validExercises.map(ex => ({
-          name: ex.name.trim(),
+          name: ex?.name?.trim() || '',
           sets: parseInt(ex.sets) || 3,
           reps: parseInt(ex.reps) || 10
         })),
@@ -216,6 +217,15 @@ export default function ProgramsPage() {
       }
     }
   };
+
+  // Safety guard to prevent undefined state errors
+  if (!newProgram || !newProgram.exercises) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <>
@@ -409,7 +419,7 @@ export default function ProgramsPage() {
             <Button
               variant="contained"
               onClick={saveProgram}
-              disabled={loading || !newProgram.name.trim() || newProgram.exercises.every(ex => ex.name.trim() === '')}
+              disabled={loading || !newProgram?.name?.trim() || !(newProgram?.exercises || []).every(ex => ex?.name?.trim?.() !== '')}
             >
               {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Save Program'}
             </Button>
