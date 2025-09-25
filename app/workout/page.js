@@ -36,6 +36,7 @@ import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc } from 'fir
 import { db } from '@/lib/firebase';
 import { saveWorkoutWithBackup } from '@/lib/offlineStorage';
 import { useDebounce } from '@/lib/performance';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const modalStyle = {
   position: 'absolute',
@@ -56,6 +57,7 @@ export default function WorkoutPage() {
   const [programs, setPrograms] = useState([]);
   const [selectedProgramId, setSelectedProgramId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -81,6 +83,8 @@ export default function WorkoutPage() {
     startTime: null
   });
 
+  const [mounted, setMounted] = useState(false);
+
   const [activeWorkout, setActiveWorkout] = useState({
     programId: '',
     programName: '',
@@ -90,6 +94,7 @@ export default function WorkoutPage() {
   });
 
   useEffect(() => {
+    setMounted(true);
     fetchPrograms();
     fetchExercises();
   }, []);
@@ -133,15 +138,27 @@ export default function WorkoutPage() {
   const fetchPrograms = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Check if Firebase is available
+      if (!db) {
+        throw new Error('Firebase not initialized. Check your configuration.');
+      }
+
       const querySnapshot = await getDocs(collection(db, 'programs'));
       const programsData = [];
       querySnapshot.forEach((doc) => {
-        programsData.push({ id: doc.id, ...doc.data() });
+        try {
+          programsData.push({ id: doc.id, ...doc.data() });
+        } catch (docError) {
+          console.warn('Error processing program document:', doc.id, docError);
+        }
       });
       setPrograms(programsData);
     } catch (error) {
       console.error('Error fetching programs:', error);
-      setSnackbarMessage('Error fetching programs');
+      setError(error);
+      setSnackbarMessage('Error fetching programs. Please check your connection.');
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
@@ -889,16 +906,30 @@ export default function WorkoutPage() {
       </Paper>
 
       <Container maxWidth="lg">
+        {/* Error State */}
+        {error && (
+          <ErrorBoundary
+            fallbackMessage="Failed to load workout data. Please check your connection and try again."
+            onRetry={() => {
+              setError(null);
+              fetchPrograms();
+            }}
+          >
+            <div></div>
+          </ErrorBoundary>
+        )}
+
         {/* Timer */}
-        <Paper
-          sx={{
-            background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.05))',
-            border: '1px solid #333',
-            p: 4,
-            mb: 3,
-            textAlign: 'center'
-          }}
-        >
+        <ErrorBoundary fallbackMessage="Timer failed to load. Please refresh the page.">
+          <Paper
+            sx={{
+              background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.05))',
+              border: '1px solid #333',
+              p: 4,
+              mb: 3,
+              textAlign: 'center'
+            }}
+          >
           <Typography
             variant="h2"
             sx={{
@@ -911,7 +942,7 @@ export default function WorkoutPage() {
               fontSize: { xs: '3rem', md: '4rem' }
             }}
           >
-            {formatTime(timer.time)}
+{mounted ? formatTime(timer.time) : '00:00:00'}
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: { xs: 2, sm: 2 }, mb: 3, flexWrap: 'wrap' }}>
             <Button
@@ -979,6 +1010,7 @@ export default function WorkoutPage() {
             </Button>
           </Box>
         </Paper>
+        </ErrorBoundary>
 
         {/* Program Selection */}
         <Paper

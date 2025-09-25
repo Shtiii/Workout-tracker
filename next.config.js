@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Fix lockfile warning by setting explicit root
+  outputFileTracingRoot: __dirname,
+
   // Improve performance and compatibility
   experimental: {
     optimizePackageImports: ['@mui/material', '@mui/icons-material', 'framer-motion'],
@@ -12,7 +15,13 @@ const nextConfig = {
 
   // Better chunk handling for deployment
   webpack: (config, { isServer }) => {
+    // Fix chart.js SSR issues
     if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+
       config.optimization.splitChunks = {
         chunks: 'all',
         cacheGroups: {
@@ -33,6 +42,12 @@ const nextConfig = {
             name: 'firebase',
             chunks: 'all',
             priority: 20,
+          },
+          charts: {
+            test: /[\\/]node_modules[\\/](chart\.js|react-chartjs-2)[\\/]/,
+            name: 'charts',
+            chunks: 'all',
+            priority: 15,
           },
         },
       };

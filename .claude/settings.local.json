@@ -15,7 +15,8 @@
       "Bash(start generate-icons.html)",
       "Bash(node:*)",
       "Bash(npx eslint:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

@@ -21,35 +21,30 @@ import {
 import { motion } from 'framer-motion';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import dynamic from 'next/dynamic';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+// Dynamically import the Chart component to prevent SSR issues
+const Chart = dynamic(() => import('@/components/Chart'), {
+  ssr: false,
+  loading: () => (
+    <Box sx={{
+      height: 280,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <CircularProgress size={40} sx={{ color: 'primary.main' }} />
+    </Box>
+  )
+});
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [workouts, setWorkouts] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedExercise, setSelectedExercise] = useState('all');
   const [exerciseList, setExerciseList] = useState([]);
@@ -72,6 +67,12 @@ export default function AnalyticsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Check if Firebase is available
+      if (!db) {
+        throw new Error('Firebase not initialized. Check your configuration.');
+      }
 
       // Fetch workouts
       const workoutsQuery = query(
@@ -79,23 +80,40 @@ export default function AnalyticsPage() {
         orderBy('completedAt', 'asc')
       );
       const workoutsSnapshot = await getDocs(workoutsQuery);
-      const workoutsData = workoutsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        completedAt: doc.data().completedAt?.toDate()
-      }));
+      const workoutsData = workoutsSnapshot.docs.map(doc => {
+        try {
+          return {
+            id: doc.id,
+            ...doc.data(),
+            completedAt: doc.data().completedAt?.toDate()
+          };
+        } catch (docError) {
+          console.warn('Error processing workout document:', doc.id, docError);
+          return null;
+        }
+      }).filter(Boolean); // Remove null entries
+
       setWorkouts(workoutsData);
 
       // Fetch programs
       const programsSnapshot = await getDocs(collection(db, 'programs'));
-      const programsData = programsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const programsData = programsSnapshot.docs.map(doc => {
+        try {
+          return {
+            id: doc.id,
+            ...doc.data()
+          };
+        } catch (docError) {
+          console.warn('Error processing program document:', doc.id, docError);
+          return null;
+        }
+      }).filter(Boolean); // Remove null entries
+
       setPrograms(programsData);
 
     } catch (error) {
       console.error('Error fetching data:', error);
+      setError(error);
     } finally {
       setLoading(false);
     }
@@ -418,66 +436,64 @@ export default function AnalyticsPage() {
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, textAlign: 'center' }}>
                       {exercise.name}
                     </Typography>
-                    <Box sx={{ height: 280 }}>
-                      <Line
-                        data={{
-                          labels: exercise.data.map(d => d.date),
-                          datasets: [
-                            {
-                              label: 'Max Weight (kg)',
-                              data: exercise.data.map(d => d.weight),
-                              borderColor: '#ff4444',
-                              backgroundColor: 'rgba(255, 68, 68, 0.1)',
-                              borderWidth: 3,
-                              pointBackgroundColor: '#ff4444',
-                              pointBorderColor: '#ffffff',
-                              pointBorderWidth: 2,
-                              pointRadius: 6,
-                              tension: 0.4,
-                              fill: true
-                            }
-                          ]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              display: false
+                    <Chart
+                      data={{
+                        labels: exercise.data.map(d => d.date),
+                        datasets: [
+                          {
+                            label: 'Max Weight (kg)',
+                            data: exercise.data.map(d => d.weight),
+                            borderColor: '#ff4444',
+                            backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                            borderWidth: 3,
+                            pointBackgroundColor: '#ff4444',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 6,
+                            tension: 0.4,
+                            fill: true
+                          }
+                        ]
+                      }}
+                      options={{
+                        plugins: {
+                          legend: {
+                            display: false
+                          },
+                          tooltip: {
+                            backgroundColor: '#1a1a1a',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#ff4444',
+                            borderWidth: 1
+                          }
+                        },
+                        scales: {
+                          x: {
+                            grid: {
+                              color: '#333'
                             },
-                            tooltip: {
-                              backgroundColor: '#1a1a1a',
-                              titleColor: '#fff',
-                              bodyColor: '#fff',
-                              borderColor: '#ff4444',
-                              borderWidth: 1
+                            ticks: {
+                              color: '#ccc',
+                              maxTicksLimit: 5
                             }
                           },
-                          scales: {
-                            x: {
-                              grid: {
-                                color: '#333'
-                              },
-                              ticks: {
-                                color: '#ccc',
-                                maxTicksLimit: 5
-                              }
+                          y: {
+                            grid: {
+                              color: '#333'
                             },
-                            y: {
-                              grid: {
-                                color: '#333'
-                              },
-                              ticks: {
-                                color: '#ccc',
-                                callback: function(value) {
-                                  return value + ' kg';
-                                }
+                            ticks: {
+                              color: '#ccc',
+                              callback: function(value) {
+                                return value + ' kg';
                               }
                             }
                           }
-                        }}
-                      />
-                    </Box>
+                        }
+                      }}
+                      title={exercise.name}
+                      height={280}
+                    />
                   </Box>
                 </Grid>
               ))}
@@ -662,6 +678,34 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: `
+            radial-gradient(circle at 20% 50%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(255, 170, 0, 0.05) 0%, transparent 50%)
+          `,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 3
+        }}
+      >
+        <ErrorBoundary
+          fallbackMessage="Failed to load analytics data. Please check your internet connection and Firebase configuration."
+          onRetry={() => {
+            setError(null);
+            fetchData();
+          }}
+        >
+          <div></div>
+        </ErrorBoundary>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{
@@ -726,12 +770,16 @@ export default function AnalyticsPage() {
           </Tabs>
 
           <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-            {activeTab === 0 && (
-              <Box sx={{ width: '100%', maxWidth: '800px' }}>
-                <CalendarView />
-              </Box>
-            )}
-            {activeTab === 1 && <ProgressView />}
+            <ErrorBoundary fallbackMessage="Calendar view failed to load. Please refresh the page and try again.">
+              {activeTab === 0 && (
+                <Box sx={{ width: '100%', maxWidth: '800px' }}>
+                  <CalendarView />
+                </Box>
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackMessage="Progress charts failed to load. Please check your workout data and try again.">
+              {activeTab === 1 && <ProgressView />}
+            </ErrorBoundary>
           </Box>
         </Paper>
       </Container>
