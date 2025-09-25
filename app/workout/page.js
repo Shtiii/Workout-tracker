@@ -20,7 +20,9 @@ import {
   CardContent,
   IconButton,
   Chip,
-  Modal
+  Modal,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -30,6 +32,7 @@ import {
   Delete as DeleteIcon,
   KeyboardArrowUp as ArrowUpIcon,
   KeyboardArrowDown as ArrowDownIcon,
+  DragIndicator as DragIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc } from 'firebase/firestore';
@@ -99,6 +102,16 @@ export default function WorkoutPage() {
   // Auto-advance settings
   const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
 
+  // Drag and drop state
+  const [draggedExercise, setDraggedExercise] = useState(null);
+
+  // Bulk set operations
+  const [selectedSets, setSelectedSets] = useState({});
+  const [bulkModeEnabled, setBulkModeEnabled] = useState(false);
+
+  // Draft workout state
+  const [hasDraftLoaded, setHasDraftLoaded] = useState(false);
+
   // Quick stats for header
   const [quickStats, setQuickStats] = useState({
     totalWorkouts: 0,
@@ -110,11 +123,86 @@ export default function WorkoutPage() {
   const [weeklyGoal, setWeeklyGoal] = useState(3);
   const [weeklyGoalModalOpen, setWeeklyGoalModalOpen] = useState(false);
 
+  // Recent workouts for quick selection
+  const [recentWorkouts, setRecentWorkouts] = useState([]);
+
+  // Auto-save functionality
+  const DRAFT_STORAGE_KEY = 'workoutDraft';
+
+  // Load draft workout from localStorage
+  const loadDraftWorkout = () => {
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        setActiveWorkout(draft);
+        setHasDraftLoaded(true);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading draft workout:', error);
+    }
+    return false;
+  };
+
+  // Save current workout as draft
+  const saveDraftWorkout = () => {
+    if (activeWorkout.exercises.length > 0) {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(activeWorkout));
+      } catch (error) {
+        console.error('Error saving draft workout:', error);
+      }
+    }
+  };
+
+  // Clear draft from storage
+  const clearDraftWorkout = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      setHasDraftLoaded(false);
+    } catch (error) {
+      console.error('Error clearing draft workout:', error);
+    }
+  };
+
+  // Manually clear draft and reset workout
+  const clearDraftManually = () => {
+    clearDraftWorkout();
+    setActiveWorkout({
+      programId: '',
+      programName: '',
+      exercises: [],
+      startTime: null,
+      endTime: null
+    });
+    setSelectedProgramId('');
+    setSnackbarMessage('Draft workout cleared');
+    setSnackbarOpen(true);
+  };
+
+  // Auto-save effect
+  useEffect(() => {
+    const autoSaveTimer = setTimeout(() => {
+      if (activeWorkout.exercises.length > 0) {
+        saveDraftWorkout();
+      }
+    }, 2000); // Auto-save after 2 seconds of inactivity
+
+    return () => clearTimeout(autoSaveTimer);
+  }, [activeWorkout]);
+
   useEffect(() => {
     setMounted(true);
     fetchPrograms();
     fetchExercises();
     fetchWeeklyGoal();
+    fetchRecentWorkouts();
+
+    // Load draft workout if it exists
+    if (typeof window !== 'undefined') {
+      loadDraftWorkout();
+    }
   }, []);
 
   useEffect(() => {
@@ -275,6 +363,28 @@ export default function WorkoutPage() {
       fetchQuickStats(); // Refresh stats with new goal
     } catch (error) {
       console.error('Error saving weekly goal:', error);
+    }
+  };
+
+  const fetchRecentWorkouts = async () => {
+    try {
+      if (!db) return;
+
+      const workoutsQuery = query(
+        collection(db, 'workoutSessions'),
+        orderBy('completedAt', 'desc')
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const workouts = workoutsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        completedAt: doc.data().completedAt?.toDate() || new Date()
+      }));
+
+      // Get last 5 workouts
+      setRecentWorkouts(workouts.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching recent workouts:', error);
     }
   };
 
@@ -664,6 +774,123 @@ export default function WorkoutPage() {
     setActiveWorkout(updatedWorkout);
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, exerciseIndex) => {
+    setDraggedExercise(exerciseIndex);
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedExercise(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+
+    if (draggedExercise === null || draggedExercise === dropIndex) {
+      return;
+    }
+
+    const updatedWorkout = { ...activeWorkout };
+    const exercises = [...updatedWorkout.exercises];
+
+    // Remove dragged exercise
+    const [draggedItem] = exercises.splice(draggedExercise, 1);
+
+    // Insert at new position
+    exercises.splice(dropIndex, 0, draggedItem);
+
+    updatedWorkout.exercises = exercises;
+    setActiveWorkout(updatedWorkout);
+    setDraggedExercise(null);
+  };
+
+  // Bulk set operations
+  const toggleSetSelection = (exerciseIndex, setIndex) => {
+    const key = `${exerciseIndex}-${setIndex}`;
+    setSelectedSets(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const clearSelectedSets = () => {
+    setSelectedSets({});
+  };
+
+  const getSelectedSetsCount = () => {
+    return Object.values(selectedSets).filter(Boolean).length;
+  };
+
+  const bulkDeleteSets = () => {
+    const updatedWorkout = { ...activeWorkout };
+
+    // Sort by exercise and set index in descending order to avoid index shifts
+    const selectedKeys = Object.keys(selectedSets).filter(key => selectedSets[key]);
+    const sortedKeys = selectedKeys
+      .map(key => {
+        const [exerciseIndex, setIndex] = key.split('-').map(Number);
+        return { exerciseIndex, setIndex, key };
+      })
+      .sort((a, b) => {
+        if (a.exerciseIndex !== b.exerciseIndex) {
+          return b.exerciseIndex - a.exerciseIndex;
+        }
+        return b.setIndex - a.setIndex;
+      });
+
+    // Remove sets from back to front
+    sortedKeys.forEach(({ exerciseIndex, setIndex }) => {
+      if (updatedWorkout.exercises[exerciseIndex]?.sets[setIndex]) {
+        updatedWorkout.exercises[exerciseIndex].sets.splice(setIndex, 1);
+      }
+    });
+
+    setActiveWorkout(updatedWorkout);
+    clearSelectedSets();
+  };
+
+  const bulkDuplicateSets = () => {
+    const updatedWorkout = { ...activeWorkout };
+
+    Object.keys(selectedSets).forEach(key => {
+      if (selectedSets[key]) {
+        const [exerciseIndex, setIndex] = key.split('-').map(Number);
+        const originalSet = updatedWorkout.exercises[exerciseIndex]?.sets[setIndex];
+        if (originalSet) {
+          const duplicateSet = { ...originalSet, completed: false };
+          updatedWorkout.exercises[exerciseIndex].sets.push(duplicateSet);
+        }
+      }
+    });
+
+    setActiveWorkout(updatedWorkout);
+    clearSelectedSets();
+  };
+
+  const bulkCompletesets = () => {
+    const updatedWorkout = { ...activeWorkout };
+
+    Object.keys(selectedSets).forEach(key => {
+      if (selectedSets[key]) {
+        const [exerciseIndex, setIndex] = key.split('-').map(Number);
+        if (updatedWorkout.exercises[exerciseIndex]?.sets[setIndex]) {
+          updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed = true;
+        }
+      }
+    });
+
+    setActiveWorkout(updatedWorkout);
+    clearSelectedSets();
+  };
+
   const updateGoalsBasedOnPerformance = async (workout) => {
     try {
       // Get current goals
@@ -800,7 +1027,8 @@ export default function WorkoutPage() {
       }
       setSnackbarOpen(true);
 
-      // Reset workout state
+      // Clear draft workout and reset state
+      clearDraftWorkout();
       setActiveWorkout({
         programId: '',
         programName: '',
@@ -823,10 +1051,17 @@ export default function WorkoutPage() {
       transition={{ duration: 0.2 }}
     >
       <Card
+        draggable
+        onDragStart={(e) => handleDragStart(e, exerciseIndex)}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, exerciseIndex)}
         sx={{
           background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
-          border: '1px solid #333',
+          border: draggedExercise === exerciseIndex ? '2px dashed #ff4444' : '1px solid #333',
           mb: 2,
+          cursor: 'move',
+          transition: 'all 0.2s ease',
           '&:hover': {
             borderColor: 'primary.main',
             boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)'
@@ -835,18 +1070,21 @@ export default function WorkoutPage() {
       >
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 700,
-                fontSize: { xs: '1rem', sm: '1.25rem' },
-                lineHeight: 1.2,
-                flex: '1 1 auto',
-                minWidth: 0
-              }}
-            >
-              {exercise.name}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 auto', minWidth: 0 }}>
+              <DragIcon sx={{ color: 'text.secondary', fontSize: '1.2rem', cursor: 'grab' }} />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  lineHeight: 1.2,
+                  flex: '1 1 auto',
+                  minWidth: 0
+                }}
+              >
+                {exercise.name}
+              </Typography>
+            </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1 }}>
                 <Chip
@@ -905,10 +1143,15 @@ export default function WorkoutPage() {
           {exercise.sets.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Grid container spacing={1} sx={{ mb: 1 }}>
-                <Grid item xs={1.5}>
+                {bulkModeEnabled && (
+                  <Grid item xs={0.8}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.6rem' }}>✓</Typography>
+                  </Grid>
+                )}
+                <Grid item xs={bulkModeEnabled ? 0.8 : 1}>
                   <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>SET</Typography>
                 </Grid>
-                <Grid item xs={3}>
+                <Grid item xs={bulkModeEnabled ? 3.2 : 3.5}>
                   <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>WEIGHT (KG)</Typography>
                 </Grid>
                 <Grid item xs={2.5}>
@@ -917,7 +1160,7 @@ export default function WorkoutPage() {
                 <Grid item xs={2}>
                   <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>RPE</Typography>
                 </Grid>
-                <Grid item xs={3}>
+                <Grid item xs={bulkModeEnabled ? 2.7 : 3}>
                   <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>DONE</Typography>
                 </Grid>
               </Grid>
@@ -925,8 +1168,28 @@ export default function WorkoutPage() {
               {exercise.sets.map((set, setIndex) => (
                 <Box key={setIndex} sx={{ mb: 3, p: 2, border: '1px solid #333', borderRadius: 2, bgcolor: 'rgba(26, 26, 26, 0.5)' }}>
                   <Grid container spacing={1} alignItems="stretch">
+                    {/* Checkbox for bulk operations */}
+                    {bulkModeEnabled && (
+                      <Grid item xs={0.8}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '56px' }}>
+                          <Checkbox
+                            checked={selectedSets[`${exerciseIndex}-${setIndex}`] || false}
+                            onChange={() => toggleSetSelection(exerciseIndex, setIndex)}
+                            sx={{
+                              color: '#ffaa00',
+                              '&.Mui-checked': {
+                                color: '#ffaa00'
+                              },
+                              '&:hover': {
+                                backgroundColor: 'rgba(255, 170, 0, 0.1)'
+                              }
+                            }}
+                          />
+                        </Box>
+                      </Grid>
+                    )}
                     {/* Set Number */}
-                    <Grid item xs={1.5}>
+                    <Grid item xs={bulkModeEnabled ? 0.8 : 1}>
                       <Box sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -936,179 +1199,119 @@ export default function WorkoutPage() {
                         borderRadius: 1,
                         border: `2px solid ${set.completed ? '#00ff88' : '#ff4444'}`
                       }}>
-                        <Typography variant="h5" sx={{ fontWeight: 900, color: set.completed ? '#00ff88' : '#ff4444' }}>
+                        <Typography variant="h6" sx={{ fontWeight: 900, color: set.completed ? '#00ff88' : '#ff4444' }}>
                           {setIndex + 1}
                         </Typography>
                       </Box>
                     </Grid>
 
-                    {/* Weight with increment buttons */}
-                    <Grid item xs={3}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <IconButton
-                            onClick={() => adjustWeight(exerciseIndex, setIndex, -2.5)}
-                            size="small"
+                    {/* Weight */}
+                    <Grid item xs={bulkModeEnabled ? 3.2 : 3.5}>
+                      <Box sx={{ position: 'relative' }}>
+                        <TextField
+                          type="number"
+                          value={set.weight}
+                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
+                          placeholder="kg"
+                          fullWidth
+                          inputProps={{
+                            inputMode: 'decimal',
+                            pattern: '[0-9]*',
+                            style: {
+                              fontSize: '1.2rem',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              padding: '8px'
+                            }
+                          }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              backgroundColor: '#0a0a0a',
+                              height: '56px',
+                              fontSize: '1.2rem',
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main'
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main',
+                                borderWidth: '2px'
+                              }
+                            }
+                          }}
+                        />
+                        {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.weight && (
+                          <Typography
+                            variant="caption"
                             sx={{
-                              bgcolor: 'rgba(255, 68, 68, 0.1)',
-                              color: '#ff4444',
-                              minWidth: '28px',
-                              height: '28px',
-                              '&:hover': { bgcolor: 'rgba(255, 68, 68, 0.2)' }
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              color: '#666',
+                              fontWeight: 600,
+                              fontSize: '1rem',
+                              pointerEvents: 'none',
+                              opacity: 0.7
                             }}
                           >
-                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>-2.5</Typography>
-                          </IconButton>
-                          <IconButton
-                            onClick={() => adjustWeight(exerciseIndex, setIndex, 2.5)}
-                            size="small"
-                            sx={{
-                              bgcolor: 'rgba(0, 255, 136, 0.1)',
-                              color: '#00ff88',
-                              minWidth: '28px',
-                              height: '28px',
-                              '&:hover': { bgcolor: 'rgba(0, 255, 136, 0.2)' }
-                            }}
-                          >
-                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+2.5</Typography>
-                          </IconButton>
-                        </Box>
-                        <Box sx={{ position: 'relative' }}>
-                          <TextField
-                            type="number"
-                            value={set.weight}
-                            onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', e.target.value)}
-                            placeholder="kg"
-                            fullWidth
-                            inputProps={{
-                              inputMode: 'decimal',
-                              pattern: '[0-9]*',
-                              style: {
-                                fontSize: '1.2rem',
-                                textAlign: 'center',
-                                fontWeight: 700,
-                                padding: '8px'
-                              }
-                            }}
-                            sx={{
-                              '& .MuiOutlinedInput-root': {
-                                backgroundColor: '#0a0a0a',
-                                height: '50px',
-                                fontSize: '1.2rem',
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                },
-                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main',
-                                  borderWidth: '2px'
-                                }
-                              }
-                            }}
-                          />
-                          {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.weight && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                color: '#666',
-                                fontWeight: 600,
-                                fontSize: '1rem',
-                                pointerEvents: 'none',
-                                opacity: 0.7
-                              }}
-                            >
-                              {exerciseHistory[exercise.name][0].weight}kg
-                            </Typography>
-                          )}
-                        </Box>
+                            {exerciseHistory[exercise.name][0].weight}kg
+                          </Typography>
+                        )}
                       </Box>
                     </Grid>
 
-                    {/* Reps with increment buttons */}
+                    {/* Reps */}
                     <Grid item xs={2.5}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                          <IconButton
-                            onClick={() => adjustReps(exerciseIndex, setIndex, -1)}
-                            size="small"
+                      <Box sx={{ position: 'relative' }}>
+                        <TextField
+                          type="number"
+                          value={set.reps}
+                          onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
+                          placeholder="reps"
+                          fullWidth
+                          inputProps={{
+                            inputMode: 'numeric',
+                            pattern: '[0-9]*',
+                            style: {
+                              fontSize: '1.2rem',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              padding: '8px'
+                            }
+                          }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              backgroundColor: '#0a0a0a',
+                              height: '56px',
+                              fontSize: '1.2rem',
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main'
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'primary.main',
+                                borderWidth: '2px'
+                              }
+                            }
+                          }}
+                        />
+                        {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.reps && (
+                          <Typography
+                            variant="caption"
                             sx={{
-                              bgcolor: 'rgba(255, 68, 68, 0.1)',
-                              color: '#ff4444',
-                              minWidth: '24px',
-                              height: '24px',
-                              '&:hover': { bgcolor: 'rgba(255, 68, 68, 0.2)' }
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              color: '#666',
+                              fontWeight: 600,
+                              fontSize: '1rem',
+                              pointerEvents: 'none',
+                              opacity: 0.7
                             }}
                           >
-                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>-1</Typography>
-                          </IconButton>
-                          <IconButton
-                            onClick={() => adjustReps(exerciseIndex, setIndex, 1)}
-                            size="small"
-                            sx={{
-                              bgcolor: 'rgba(0, 255, 136, 0.1)',
-                              color: '#00ff88',
-                              minWidth: '24px',
-                              height: '24px',
-                              '&:hover': { bgcolor: 'rgba(0, 255, 136, 0.2)' }
-                            }}
-                          >
-                            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>+1</Typography>
-                          </IconButton>
-                        </Box>
-                        <Box sx={{ position: 'relative' }}>
-                          <TextField
-                            type="number"
-                            value={set.reps}
-                            onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', e.target.value)}
-                            placeholder="reps"
-                            fullWidth
-                            inputProps={{
-                              inputMode: 'numeric',
-                              pattern: '[0-9]*',
-                              style: {
-                                fontSize: '1.2rem',
-                                textAlign: 'center',
-                                fontWeight: 700,
-                                padding: '8px'
-                              }
-                            }}
-                            sx={{
-                              '& .MuiOutlinedInput-root': {
-                                backgroundColor: '#0a0a0a',
-                                height: '50px',
-                                fontSize: '1.2rem',
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                },
-                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main',
-                                  borderWidth: '2px'
-                                }
-                              }
-                            }}
-                          />
-                          {exerciseHistory[exercise.name] && exerciseHistory[exercise.name][0] && !set.reps && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                color: '#666',
-                                fontWeight: 600,
-                                fontSize: '1rem',
-                                pointerEvents: 'none',
-                                opacity: 0.7
-                              }}
-                            >
-                              {exerciseHistory[exercise.name][0].reps}
-                            </Typography>
-                          )}
-                        </Box>
+                            {exerciseHistory[exercise.name][0].reps}
+                          </Typography>
+                        )}
                       </Box>
                     </Grid>
 
@@ -1143,7 +1346,7 @@ export default function WorkoutPage() {
                     </Grid>
 
                     {/* Complete Button */}
-                    <Grid item xs={3}>
+                    <Grid item xs={bulkModeEnabled ? 2.7 : 3}>
                       <Button
                         variant={set.completed ? "contained" : "outlined"}
                         onClick={() => completeSet(exerciseIndex, setIndex)}
@@ -1152,7 +1355,7 @@ export default function WorkoutPage() {
                           height: '56px',
                           minWidth: 'unset',
                           fontWeight: 900,
-                          fontSize: '1.1rem',
+                          fontSize: { xs: '0.9rem', sm: '1rem' },
                           background: set.completed ? 'linear-gradient(135deg, #00ff88, #00cc66)' : 'transparent',
                           color: set.completed ? '#000' : 'primary.main',
                           border: set.completed ? 'none' : '2px solid',
@@ -1339,98 +1542,6 @@ export default function WorkoutPage() {
           </ErrorBoundary>
         )}
 
-        {/* Timer */}
-        <ErrorBoundary fallbackMessage="Timer failed to load. Please refresh the page.">
-          <Paper
-            sx={{
-              background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 68, 68, 0.05))',
-              border: '1px solid #333',
-              p: 4,
-              mb: 3,
-              textAlign: 'center'
-            }}
-          >
-          <Typography
-            variant="h2"
-            sx={{
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              mb: 3,
-              fontSize: { xs: '3rem', md: '4rem' }
-            }}
-          >
-{mounted ? formatTime(timer.time) : '00:00:00'}
-          </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: { xs: 2, sm: 2 }, mb: 3, flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              startIcon={<PlayIcon />}
-              onClick={startTimer}
-              disabled={timer.isRunning}
-              sx={{
-                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
-                minWidth: { xs: '100px', sm: '120px' },
-                height: { xs: '48px', sm: '40px' },
-                fontSize: { xs: '0.9rem', sm: '0.875rem' },
-                '&:hover': {
-                  transform: 'scale(1.05)'
-                },
-                transition: 'all 0.2s ease'
-              }}
-            >
-              START
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<PauseIcon />}
-              onClick={pauseTimer}
-              disabled={!timer.isRunning}
-              sx={{
-                background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
-                color: '#000',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
-                minWidth: { xs: '100px', sm: '120px' },
-                height: { xs: '48px', sm: '40px' },
-                fontSize: { xs: '0.9rem', sm: '0.875rem' },
-                '&:hover': {
-                  transform: 'scale(1.05)'
-                },
-                transition: 'all 0.2s ease'
-              }}
-            >
-              PAUSE
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<StopIcon />}
-              onClick={stopTimer}
-              sx={{
-                background: 'linear-gradient(135deg, #ff3333, #cc0000)',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
-                minWidth: { xs: '100px', sm: '120px' },
-                height: { xs: '48px', sm: '40px' },
-                fontSize: { xs: '0.9rem', sm: '0.875rem' },
-                '&:hover': {
-                  transform: 'scale(1.05)'
-                },
-                transition: 'all 0.2s ease'
-              }}
-            >
-              END
-            </Button>
-          </Box>
-        </Paper>
-        </ErrorBoundary>
 
         {/* Program Selection */}
         <Paper
@@ -1565,8 +1676,216 @@ export default function WorkoutPage() {
             >
               Auto: {autoAdvanceEnabled ? 'ON' : 'OFF'}
             </Button>
+
+            {/* Bulk Mode Toggle */}
+            <Button
+              variant={bulkModeEnabled ? "contained" : "outlined"}
+              onClick={() => {
+                setBulkModeEnabled(!bulkModeEnabled);
+                if (bulkModeEnabled) clearSelectedSets();
+              }}
+              sx={{
+                fontWeight: 600,
+                fontSize: { xs: '0.75rem', sm: '0.8rem' },
+                minWidth: { xs: '80px', sm: '100px' },
+                height: { xs: '36px', sm: '40px' },
+                background: bulkModeEnabled ? 'linear-gradient(135deg, #ffaa00, #ff8800)' : 'transparent',
+                color: bulkModeEnabled ? '#000' : '#ffaa00',
+                borderColor: '#ffaa00',
+                '&:hover': {
+                  background: bulkModeEnabled ? 'linear-gradient(135deg, #ffaa00, #ff8800)' : 'rgba(255, 170, 0, 0.1)',
+                  borderColor: '#ffaa00'
+                }
+              }}
+            >
+              Bulk: {bulkModeEnabled ? 'ON' : 'OFF'}
+            </Button>
           </Box>
         </Paper>
+
+        {/* Draft Workout Notification */}
+        {hasDraftLoaded && activeWorkout.exercises.length > 0 && (
+          <Paper
+            sx={{
+              background: 'linear-gradient(135deg, #1a1a1a, rgba(0, 255, 136, 0.1))',
+              border: '2px solid #00ff88',
+              p: 2,
+              mb: 3
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography variant="h6" sx={{ color: '#00ff88', fontWeight: 700, mb: 0.5 }}>
+                  🔄 Draft Workout Loaded
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Your previous workout was restored. Auto-saving every 2 seconds.
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                onClick={clearDraftManually}
+                sx={{
+                  color: '#00ff88',
+                  borderColor: '#00ff88',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    borderColor: '#00ff88'
+                  }
+                }}
+              >
+                Clear Draft
+              </Button>
+            </Box>
+          </Paper>
+        )}
+
+        {/* Recent Workouts */}
+        {recentWorkouts.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mb: 3
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+                textAlign: 'center',
+                background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}
+            >
+              Recent Workouts
+            </Typography>
+            <Grid container spacing={2}>
+              {recentWorkouts.map((workout, index) => (
+                <Grid item xs={12} key={workout.id}>
+                  <Card
+                    onClick={() => {
+                      const exercisesWithSets = workout.exercises.map(exercise => {
+                        const smartDefaults = getSmartDefaults(exercise.name);
+                        return {
+                          name: exercise.name,
+                          targetSets: exercise.targetSets || 3,
+                          targetReps: exercise.targetReps || 10,
+                          sets: [{
+                            weight: smartDefaults.weight,
+                            reps: smartDefaults.reps,
+                            completed: false,
+                            rpe: ''
+                          }]
+                        };
+                      });
+
+                      setActiveWorkout({
+                        programId: workout.programId || '',
+                        programName: workout.programName || 'Recent Workout',
+                        exercises: exercisesWithSets,
+                        startTime: new Date(),
+                        endTime: null
+                      });
+                      setSelectedProgramId('');
+                    }}
+                    sx={{
+                      background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                      border: '1px solid #333',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)',
+                        transform: 'translateY(-2px)'
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ py: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{
+                              fontWeight: 700,
+                              color: '#ff4444',
+                              fontSize: { xs: '0.9rem', sm: '1rem' },
+                              mb: 0.5
+                            }}
+                          >
+                            {workout.programName || 'Custom Workout'}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                              fontSize: { xs: '0.75rem', sm: '0.8rem' },
+                              mb: 1
+                            }}
+                          >
+                            {workout.completedAt.toLocaleDateString()} • {workout.exercises?.length || 0} exercises
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            {workout.exercises?.slice(0, 3).map((exercise, idx) => (
+                              <Chip
+                                key={idx}
+                                label={exercise.name}
+                                size="small"
+                                sx={{
+                                  bgcolor: 'rgba(255, 170, 0, 0.1)',
+                                  color: '#ffaa00',
+                                  fontSize: '0.65rem',
+                                  height: '20px',
+                                  '& .MuiChip-label': {
+                                    px: 1
+                                  }
+                                }}
+                              />
+                            ))}
+                            {workout.exercises?.length > 3 && (
+                              <Chip
+                                label={`+${workout.exercises.length - 3} more`}
+                                size="small"
+                                sx={{
+                                  bgcolor: 'rgba(255, 68, 68, 0.1)',
+                                  color: '#ff4444',
+                                  fontSize: '0.65rem',
+                                  height: '20px',
+                                  '& .MuiChip-label': {
+                                    px: 1
+                                  }
+                                }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                        <Box sx={{ ml: 2 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: '#00ff88',
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            Click to Load
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
 
         {/* Rest Timer */}
         {restTimer.isActive && (
@@ -1597,23 +1916,128 @@ export default function WorkoutPage() {
             >
               {formatRestTime(restTimer.timeLeft)}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
                 onClick={stopRestTimer}
                 sx={{
                   background: 'linear-gradient(135deg, #ff4444, #cc0000)',
-                  fontWeight: 700
+                  fontWeight: 700,
+                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                  px: { xs: 2, sm: 3 }
                 }}
               >
                 SKIP REST
               </Button>
               <Button
                 variant="outlined"
-                onClick={() => startRestTimer(30)}
-                sx={{ borderColor: '#ffaa00', color: '#ffaa00' }}
+                onClick={() => startRestTimer(60)}
+                sx={{
+                  borderColor: '#ffaa00',
+                  color: '#ffaa00',
+                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                  px: { xs: 1.5, sm: 2 }
+                }}
+              >
+                60s
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => startRestTimer(90)}
+                sx={{
+                  borderColor: '#ffaa00',
+                  color: '#ffaa00',
+                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                  px: { xs: 1.5, sm: 2 }
+                }}
+              >
+                90s
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => startRestTimer(120)}
+                sx={{
+                  borderColor: '#ffaa00',
+                  color: '#ffaa00',
+                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                  px: { xs: 1.5, sm: 2 }
+                }}
+              >
+                120s
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => startRestTimer(restTimer.timeLeft + 30)}
+                sx={{
+                  borderColor: '#00ff88',
+                  color: '#00ff88',
+                  fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                  px: { xs: 1.5, sm: 2 }
+                }}
               >
                 +30s
+              </Button>
+            </Box>
+          </Paper>
+        )}
+
+        {/* Bulk Actions Bar */}
+        {bulkModeEnabled && getSelectedSetsCount() > 0 && (
+          <Paper
+            sx={{
+              background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 170, 0, 0.1))',
+              border: '2px solid #ffaa00',
+              p: 2,
+              mb: 3,
+              position: 'sticky',
+              top: 16,
+              zIndex: 100
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ color: '#ffaa00', fontWeight: 700 }}>
+                {getSelectedSetsCount()} sets selected
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={clearSelectedSets}
+                sx={{ color: '#ffaa00', borderColor: '#ffaa00' }}
+              >
+                Clear Selection
+              </Button>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Button
+                variant="contained"
+                onClick={bulkCompletesets}
+                sx={{
+                  background: 'linear-gradient(135deg, #00ff88, #00cc66)',
+                  color: '#000',
+                  fontWeight: 700
+                }}
+              >
+                Complete All
+              </Button>
+              <Button
+                variant="contained"
+                onClick={bulkDuplicateSets}
+                sx={{
+                  background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
+                  color: '#000',
+                  fontWeight: 700
+                }}
+              >
+                Duplicate All
+              </Button>
+              <Button
+                variant="contained"
+                onClick={bulkDeleteSets}
+                sx={{
+                  background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                  fontWeight: 700
+                }}
+              >
+                Delete All
               </Button>
             </Box>
           </Paper>
