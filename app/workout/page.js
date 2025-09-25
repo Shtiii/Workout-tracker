@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -127,12 +127,14 @@ export default function WorkoutPage() {
   // Load draft workout from localStorage
   const loadDraftWorkout = () => {
     try {
-      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (saved) {
-        const draft = JSON.parse(saved);
-        setActiveWorkout(draft);
-        setHasDraftLoaded(true);
-        return true;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (saved) {
+          const draft = JSON.parse(saved);
+          setActiveWorkout(draft);
+          setHasDraftLoaded(true);
+          return true;
+        }
       }
     } catch (error) {
       console.error('Error loading draft workout:', error);
@@ -141,21 +143,25 @@ export default function WorkoutPage() {
   };
 
   // Save current workout as draft
-  const saveDraftWorkout = () => {
+  const saveDraftWorkout = useCallback(() => {
     if (activeWorkout.exercises.length > 0) {
       try {
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(activeWorkout));
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(activeWorkout));
+        }
       } catch (error) {
         console.error('Error saving draft workout:', error);
       }
     }
-  };
+  }, [activeWorkout]);
 
   // Clear draft from storage
   const clearDraftWorkout = () => {
     try {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
-      setHasDraftLoaded(false);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        setHasDraftLoaded(false);
+      }
     } catch (error) {
       console.error('Error clearing draft workout:', error);
     }
@@ -382,7 +388,7 @@ export default function WorkoutPage() {
     }
   };
 
-  const fetchQuickStats = async () => {
+  const fetchQuickStats = useCallback(async () => {
     try {
       if (!db) return;
 
@@ -430,7 +436,7 @@ export default function WorkoutPage() {
     } catch (error) {
       console.error('Error fetching quick stats:', error);
     }
-  };
+  }, [weeklyGoal]);
 
   const fetchExercises = async () => {
     // Comprehensive exercise database

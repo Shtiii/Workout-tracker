@@ -22,7 +22,11 @@ import {
   ListItemSecondaryAction,
   IconButton
 } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import {
+  Delete as DeleteIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon
+} from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -54,6 +58,35 @@ export default function AnalyticsPage() {
   const [selectedExercise, setSelectedExercise] = useState('all');
   const [exerciseList, setExerciseList] = useState([]);
   const [allWorkouts, setAllWorkouts] = useState([]);
+
+  // Calendar navigation state
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date().getMonth());
+  const [currentCalendarYear, setCurrentCalendarYear] = useState(new Date().getFullYear());
+
+  // Calendar navigation functions
+  const goToPreviousMonth = () => {
+    if (currentCalendarMonth === 0) {
+      setCurrentCalendarMonth(11);
+      setCurrentCalendarYear(currentCalendarYear - 1);
+    } else {
+      setCurrentCalendarMonth(currentCalendarMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (currentCalendarMonth === 11) {
+      setCurrentCalendarMonth(0);
+      setCurrentCalendarYear(currentCalendarYear + 1);
+    } else {
+      setCurrentCalendarMonth(currentCalendarMonth + 1);
+    }
+  };
+
+  const goToCurrentMonth = () => {
+    const today = new Date();
+    setCurrentCalendarMonth(today.getMonth());
+    setCurrentCalendarYear(today.getFullYear());
+  };
 
   useEffect(() => {
     fetchData();
@@ -149,9 +182,7 @@ export default function AnalyticsPage() {
     });
 
     const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const firstDay = new Date(currentYear, currentMonth, 1);
+    const firstDay = new Date(currentCalendarYear, currentCalendarMonth, 1);
 
     // Calculate start date for Monday-based week
     const startDate = new Date(firstDay);
@@ -168,7 +199,7 @@ export default function AnalyticsPage() {
       date.setDate(startDate.getDate() + i);
 
       const hasWorkout = workoutDates.has(date.toDateString());
-      const isCurrentMonth = date.getMonth() === currentMonth;
+      const isCurrentMonth = date.getMonth() === currentCalendarMonth;
       const isToday = date.toDateString() === today.toDateString();
 
       week.push({
@@ -287,12 +318,67 @@ export default function AnalyticsPage() {
         sx={{
           background: '#1a1a1a',
           border: '1px solid #333',
-          p: 3
+          p: 3,
+          maxWidth: 600,
+          mx: 'auto' // Center the calendar horizontally
         }}
       >
         <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
           WORKOUT CALENDAR
         </Typography>
+
+        {/* Month Navigation Header */}
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          px: 1
+        }}>
+          <IconButton
+            onClick={goToPreviousMonth}
+            sx={{
+              color: '#ffaa00',
+              '&:hover': { backgroundColor: 'rgba(255, 170, 0, 0.1)' }
+            }}
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#ffaa00' }}>
+              {new Date(currentCalendarYear, currentCalendarMonth).toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric'
+              })}
+            </Typography>
+            {(currentCalendarMonth !== new Date().getMonth() || currentCalendarYear !== new Date().getFullYear()) && (
+              <Typography
+                variant="caption"
+                onClick={goToCurrentMonth}
+                sx={{
+                  color: '#ff4444',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: '0.7rem',
+                  '&:hover': { color: '#ff6666' }
+                }}
+              >
+                Go to current month
+              </Typography>
+            )}
+          </Box>
+
+          <IconButton
+            onClick={goToNextMonth}
+            sx={{
+              color: '#ffaa00',
+              '&:hover': { backgroundColor: 'rgba(255, 170, 0, 0.1)' }
+            }}
+          >
+            <ChevronRightIcon />
+          </IconButton>
+        </Box>
 
         <Grid container sx={{ mb: 2 }}>
           {dayNames.map(day => (
