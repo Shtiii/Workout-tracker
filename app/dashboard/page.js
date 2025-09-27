@@ -602,68 +602,69 @@ export default function DashboardPage() {
   const StatCard = memo(({ title, value, icon, gradient, onClick }) => {
     const isClickable = !!onClick;
     return (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -2 }}
-      transition={{ duration: 0.2 }}
-    >
-      <Card
-        sx={{
-          background: `linear-gradient(135deg, ${gradient})`,
-          border: '1px solid rgba(255, 68, 68, 0.2)',
-          position: 'relative',
-          overflow: 'hidden',
-          cursor: onClick ? 'pointer' : 'default',
-          height: { xs: 120, sm: 140 }, // Fixed height for consistency
-          '&:hover': {
-            border: '1px solid #ff4444',
-            boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
-          }
-        }}
-        onClick={onClick}
+      <motion.div
+        whileHover={{ scale: 1.02, y: -2 }}
+        transition={{ duration: 0.2 }}
       >
-        <CardContent sx={{
-          textAlign: 'center',
-          py: { xs: 2, sm: 3 },
-          px: { xs: 1.5, sm: 3 },
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center'
-        }}>
-          <Box sx={{ mb: { xs: 1, sm: 2 }, color: 'primary.main' }}>
-            {icon}
-          </Box>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              mb: { xs: 0.5, sm: 1 },
-              fontSize: { xs: '1.5rem', sm: '2rem', md: '3rem' },
-              lineHeight: 1.2
-            }}
-          >
-            {value}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'text.secondary',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              fontWeight: 600,
-              fontSize: { xs: '0.6rem', sm: '0.75rem' }
-            }}
-          >
-            {title}
-          </Typography>
-        </CardContent>
-      </Card>
-    </motion.div>
-  ));
+        <Card
+          sx={{
+            background: `linear-gradient(135deg, ${gradient})`,
+            border: '1px solid rgba(255, 68, 68, 0.2)',
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: onClick ? 'pointer' : 'default',
+            height: { xs: 120, sm: 140 }, // Fixed height for consistency
+            '&:hover': {
+              border: '1px solid #ff4444',
+              boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
+            }
+          }}
+          onClick={onClick}
+        >
+          <CardContent sx={{
+            textAlign: 'center',
+            py: { xs: 2, sm: 3 },
+            px: { xs: 1.5, sm: 3 },
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center'
+          }}>
+            <Box sx={{ mb: { xs: 1, sm: 2 }, color: 'primary.main' }}>
+              {icon}
+            </Box>
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: { xs: 0.5, sm: 1 },
+                fontSize: { xs: '1.5rem', sm: '2rem', md: '3rem' },
+                lineHeight: 1.2
+              }}
+            >
+              {value}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                fontWeight: 600,
+                fontSize: { xs: '0.6rem', sm: '0.75rem' }
+              }}
+            >
+              {title}
+            </Typography>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  });
 
   StatCard.displayName = 'StatCard';
 
