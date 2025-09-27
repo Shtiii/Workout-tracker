@@ -1,56 +1,231 @@
 {
-  "name": "Shtii Planner",
-  "short_name": "ShtiiPlanner",
-  "description": "Your personal workout tracker with smart features, goal tracking, and offline support",
-  "start_url": "/dashboard",
+  "name": "Workout Tracker Pro",
+  "short_name": "WorkoutTracker",
+  "description": "Advanced workout tracking and analytics app with comprehensive features",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#ff4444",
   "orientation": "portrait-primary",
   "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["fitness", "health", "lifestyle", "sports"],
   "icons": [
+    {
+      "src": "/workout-icon-72.svg",
+      "sizes": "72x72",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-96.svg",
+      "sizes": "96x96",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-128.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-144.svg",
+      "sizes": "144x144",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-152.svg",
+      "sizes": "152x152",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/workout-icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "maskable any"
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-384.svg",
+      "sizes": "384x384",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
       "src": "/workout-icon-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "maskable any"
+      "purpose": "any"
+    },
+    {
+      "src": "/workout-icon-maskable-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/workout-icon-maskable-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["health", "fitness", "lifestyle"],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Workout tracking interface"
+    },
+    {
+      "src": "/screenshot-mobile-2.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Analytics and progress tracking"
+    },
+    {
+      "src": "/screenshot-desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Desktop workout dashboard"
+    },
+    {
+      "src": "/screenshot-desktop-2.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Advanced analytics view"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Start Workout",
-      "short_name": "Train",
-      "description": "Begin a new workout session",
+      "short_name": "Workout",
+      "description": "Quickly start a new workout session",
       "url": "/workout",
-      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/workout-icon-96.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
-      "name": "View Goals",
-      "short_name": "Goals",
-      "description": "Check and set your fitness goals",
-      "url": "/goals",
-      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "View Analytics",
-      "short_name": "Analytics",
-      "description": "Check your progress and statistics",
+      "name": "View Progress",
+      "short_name": "Progress",
+      "description": "Check your workout progress and analytics",
       "url": "/analytics",
-      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/analytics-icon-96.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
       "name": "Programs",
       "short_name": "Programs",
-      "description": "Manage your workout programs",
+      "description": "Browse and manage workout programs",
       "url": "/programs",
-      "icons": [{ "src": "/workout-icon-192.svg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/programs-icon-96.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Insights",
+      "short_name": "Insights",
+      "description": "View personal insights and achievements",
+      "url": "/insights",
+      "icons": [
+        {
+          "src": "/insights-icon-96.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     }
-  ]
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.workouttracker.pro",
+      "id": "com.workouttracker.pro"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/workout-tracker-pro/id1234567890"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "handle_links": "preferred",
+  "capture_links": "new-client",
+  "protocol_handlers": [
+    {
+      "protocol": "web+workout",
+      "url": "/workout?action=%s"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "application/json": [".json"],
+        "text/csv": [".csv"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "workout-data",
+          "accept": ["application/json", "text/csv"]
+        }
+      ]
+    }
+  },
+  "permissions": [
+    "notifications",
+    "background-sync",
+    "persistent-storage"
+  ],
+  "features": [
+    "cross-origin-isolated",
+    "cross-origin-embedder-policy"
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "window_controls_overlay": {
+    "enabled": true
+  }
 }

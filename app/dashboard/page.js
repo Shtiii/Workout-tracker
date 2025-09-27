@@ -420,6 +420,7 @@ export default function DashboardPage() {
       isRunning: true,
       startTime: Date.now() - (prev.time * 1000)
     }));
+    announceTimerUpdate('Workout timer started');
   };
 
   const pauseTimer = () => {
@@ -427,14 +428,17 @@ export default function DashboardPage() {
       ...prev,
       isRunning: false
     }));
+    announceTimerUpdate(`Workout timer paused at ${formatTime(timer.time)}`);
   };
 
   const stopTimer = () => {
+    const finalTime = formatTime(timer.time);
     setTimer({
       time: 0,
       isRunning: false,
       startTime: null
     });
+    announceTimerUpdate(`Workout timer stopped. Total time was ${finalTime}`);
   };
 
   const handleGoalModalOpen = () => {
@@ -574,8 +578,30 @@ export default function DashboardPage() {
     return achievementsList.sort((a, b) => b.date - a.date).slice(0, 6); // Latest 6 achievements
   }, []);
 
+  // Screen reader announcements for timer updates
+  const announceTimerUpdate = (message) => {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.setAttribute('class', 'sr-only');
+    announcement.style.position = 'absolute';
+    announcement.style.left = '-10000px';
+    announcement.style.width = '1px';
+    announcement.style.height = '1px';
+    announcement.style.overflow = 'hidden';
+    announcement.textContent = message;
+    document.body.appendChild(announcement);
+    setTimeout(() => {
+      if (document.body.contains(announcement)) {
+        document.body.removeChild(announcement);
+      }
+    }, 1000);
+  };
+
   // Memoized StatCard component for better performance
-  const StatCard = memo(({ title, value, icon, gradient, onClick }) => (
+  const StatCard = memo(({ title, value, icon, gradient, onClick }) => {
+    const isClickable = !!onClick;
+    return (
     <motion.div
       whileHover={{ scale: 1.02, y: -2 }}
       transition={{ duration: 0.2 }}

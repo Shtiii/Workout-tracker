@@ -1,84 +1,77 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Fix lockfile warning by setting explicit root
-  outputFileTracingRoot: __dirname,
-
-  // Improve performance and compatibility
   experimental: {
-    optimizePackageImports: ['@mui/material', '@mui/icons-material', 'framer-motion'],
+    appDir: true,
   },
-
-  // Optimize build output
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
-  },
-
-  // Better chunk handling for deployment
-  webpack: (config, { isServer }) => {
-    // Fix chart.js SSR issues
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-      };
-
-      // Fix module resolution for dynamic imports
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'react-chartjs-2': require.resolve('react-chartjs-2'),
-        'chart.js': require.resolve('chart.js'),
-      };
-    }
-    return config;
-  },
-
-  // Output configuration for better deployment
-  output: 'standalone',
-
-  // Performance optimizations
-  poweredByHeader: false,
-  compress: true,
-
-  // Static asset optimization
   images: {
-    formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60,
+    domains: ['firebasestorage.googleapis.com'],
   },
-
-  // Headers for better PWA support
+  // PWA configuration
+  async headers() {
+    return [
+      {
+        source: '/service-worker.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
+  // Security headers
   async headers() {
     return [
       {
         source: '/(.*)',
         headers: [
           {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
             key: 'X-Frame-Options',
             value: 'DENY',
           },
           {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-        ],
-      },
-      {
-        source: '/sw.js',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/javascript; charset=utf-8',
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
           {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate',
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
           },
         ],
       },
     ];
+  },
+  // Webpack configuration for better performance
+  webpack: (config, { dev, isServer }) => {
+    // Optimize bundle size
+    if (!dev && !isServer) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+        },
+      };
+    }
+    
+    return config;
   },
 };
 

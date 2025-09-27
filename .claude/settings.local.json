@@ -16,7 +16,10 @@
       "Bash(node:*)",
       "Bash(npx eslint:*)",
       "Bash(git reset:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(taskkill:*)",
+      "Bash(del nul)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

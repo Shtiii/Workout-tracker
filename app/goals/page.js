@@ -28,6 +28,14 @@ import {
 import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  sanitizeGoalData,
+  sanitizeString,
+  sanitizeNumber,
+  checkRateLimit,
+  sanitizeErrorForLogging
+} from '@/lib/security';
+import { logError } from '@/lib/errorLogger';
 
 const modalStyle = {
   position: 'absolute',
@@ -160,6 +168,21 @@ export default function GoalsPage() {
   };
 
   const handleInputChange = (field, value) => {
+    // Apply input constraints during typing
+    if (field === 'name' && typeof value === 'string') {
+      value = value.slice(0, 100); // Limit name length
+    } else if (field === 'description' && typeof value === 'string') {
+      value = value.slice(0, 500); // Limit description length
+    } else if (field === 'unit' && typeof value === 'string') {
+      value = value.slice(0, 50); // Limit unit length
+    } else if ((field === 'target' || field === 'current') && value !== '') {
+      // Ensure numeric values are within bounds
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        value = Math.min(Math.max(numValue, 0), 10000);
+      }
+    }
+
     setNewGoal({ ...newGoal, [field]: value });
   };
 

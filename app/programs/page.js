@@ -28,6 +28,16 @@ import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/ico
 import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  sanitizeProgramName,
+  sanitizeExerciseName,
+  sanitizeNumber,
+  validateProgramData,
+  checkRateLimit,
+  sanitizeErrorForLogging,
+  sanitizeString
+} from '@/lib/security';
+import { logError } from '@/lib/errorLogger';
 
 const modalStyle = {
   position: 'absolute',
@@ -49,6 +59,35 @@ export default function ProgramsPage() {
 
   const [programs, setPrograms] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitleId] = useState('program-modal-title');
+
+  // Focus management for modal
+  useEffect(() => {
+    if (modalOpen) {
+      // Focus the first input when modal opens
+      const timer = setTimeout(() => {
+        const firstInput = document.querySelector('#program-name-input');
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [modalOpen]);
+
+  // Escape key handler for modal
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && modalOpen) {
+        handleCloseModal();
+      }
+    };
+
+    if (modalOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [modalOpen]);
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [editingProgram, setEditingProgram] = useState(null);
@@ -139,11 +178,28 @@ export default function ProgramsPage() {
   };
 
   const handleProgramNameChange = (event) => {
-    setNewProgram({ ...newProgram, name: event.target.value });
+    const rawValue = event.target.value;
+    // Allow typing but limit length during input
+    const limitedValue = rawValue.slice(0, 100);
+    setNewProgram({ ...newProgram, name: limitedValue });
   };
 
   const handleExerciseChange = (index, field, value) => {
     const updatedExercises = [...newProgram.exercises];
+
+    if (field === 'name') {
+      // Limit exercise name length during input
+      value = value.slice(0, 100);
+    } else if (field === 'sets' || field === 'reps') {
+      // Ensure numeric values are within bounds
+      const numValue = parseInt(value);
+      if (field === 'sets') {
+        value = Math.min(Math.max(numValue || 1, 1), 20);
+      } else if (field === 'reps') {
+        value = Math.min(Math.max(numValue || 1, 1), 100);
+      }
+    }
+
     updatedExercises[index] = { ...updatedExercises[index], [field]: value };
     setNewProgram({ ...newProgram, exercises: updatedExercises });
   };
@@ -169,35 +225,53 @@ export default function ProgramsPage() {
       return;
     }
 
-
-
-    // Validation
-    if (!newProgram?.name?.trim()) {
-      showSnackbar('Please enter a program name', 'error');
-      return;
-    }
-
-    const validExercises = (newProgram?.exercises || []).filter(exercise =>
-      exercise && typeof exercise.name === 'string' && exercise.name.trim() !== ''
-    );
-
-    if (validExercises.length === 0) {
-      showSnackbar('Please add at least one exercise with a name', 'error');
-      return;
-    }
-
     try {
-      setLoading(true);
+      // Rate limiting check
+      checkRateLimit('save_program');
+
+      // Sanitize and validate program data
+      const sanitizedName = sanitizeProgramName(newProgram?.name);
+
+      if (!newProgram?.exercises || newProgram.exercises.length === 0) {
+        showSnackbar('Please add at least one exercise', 'error');
+        return;
+      }
+
+      // Sanitize and validate exercises
+      const sanitizedExercises = [];
+      for (const exercise of newProgram.exercises) {
+        if (!exercise?.name?.trim()) {
+          continue; // Skip empty exercises
+        }
+
+        try {
+          const sanitizedExercise = {
+            name: sanitizeExerciseName(exercise.name),
+            sets: sanitizeNumber(exercise.sets, { min: 1, max: 20, integer: true }),
+            reps: sanitizeNumber(exercise.reps, { min: 1, max: 100, integer: true })
+          };
+          sanitizedExercises.push(sanitizedExercise);
+        } catch (exerciseError) {
+          showSnackbar(`Invalid exercise data: ${exerciseError.message}`, 'error');
+          return;
+        }
+      }
+
+      if (sanitizedExercises.length === 0) {
+        showSnackbar('Please add at least one valid exercise', 'error');
+        return;
+      }
 
       const programData = {
-        name: newProgram?.name?.trim() || '',
-        exercises: validExercises.map(ex => ({
-          name: (ex && typeof ex.name === 'string') ? ex.name.trim() : '',
-          sets: parseInt(ex?.sets || '3') || 3,
-          reps: parseInt(ex?.reps || '10') || 10
-        })),
+        name: sanitizedName,
+        exercises: sanitizedExercises,
         updatedAt: new Date()
       };
+
+      // Final validation
+      validateProgramData(programData);
+
+      setLoading(true);
 
       if (editingProgram && editingProgram.id) {
         // UPDATE existing program
@@ -207,15 +281,28 @@ export default function ProgramsPage() {
       } else {
         // CREATE new program
         programData.createdAt = new Date();
-        const docRef = await addDoc(collection(db, 'programs'), programData);
+        await addDoc(collection(db, 'programs'), programData);
         showSnackbar('Program created successfully!', 'success');
       }
 
       fetchPrograms(); // Refresh the list
       handleCloseModal();
     } catch (error) {
-      const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
-      showSnackbar('Error saving program: ' + errorMessage, 'error');
+      const sanitizedError = sanitizeErrorForLogging(error, {
+        action: 'save_program',
+        programName: newProgram?.name,
+        exerciseCount: newProgram?.exercises?.length
+      });
+
+      logError(error, sanitizedError.context);
+
+      if (error.message.includes('Rate limit')) {
+        showSnackbar('Too many requests. Please wait before trying again.', 'error');
+      } else if (error.message.includes('validation')) {
+        showSnackbar(error.message, 'error');
+      } else {
+        showSnackbar('Error saving program. Please try again.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -227,14 +314,32 @@ export default function ProgramsPage() {
       return;
     }
 
+    if (!programId || typeof programId !== 'string') {
+      showSnackbar('Invalid program ID', 'error');
+      return;
+    }
+
     if (confirm('Are you sure you want to delete this program?')) {
       try {
+        // Rate limiting check
+        checkRateLimit('delete_action');
+
         await deleteDoc(doc(db, 'programs', programId));
         showSnackbar('Program deleted successfully!', 'success');
         fetchPrograms(); // Refresh the list
       } catch (error) {
-        console.error('Error deleting program:', error);
-        showSnackbar('Error deleting program: ' + error.message, 'error');
+        const sanitizedError = sanitizeErrorForLogging(error, {
+          action: 'delete_program',
+          programId: programId.substring(0, 8) + '...' // Only log partial ID
+        });
+
+        logError(error, sanitizedError.context);
+
+        if (error.message.includes('Rate limit')) {
+          showSnackbar('Too many delete requests. Please wait before trying again.', 'error');
+        } else {
+          showSnackbar('Error deleting program. Please try again.', 'error');
+        }
       }
     }
   };
@@ -252,7 +357,11 @@ export default function ProgramsPage() {
     <>
       <AppBar position="sticky">
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            component="h1"
+            sx={{ flexGrow: 1 }}
+          >
             My Programs
           </Typography>
         </Toolbar>
@@ -260,8 +369,18 @@ export default function ProgramsPage() {
 
       <Container maxWidth="lg" sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 2, sm: 3 } }}>
         {programs.length === 0 ? (
-          <Box textAlign="center" mt={4}>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Box
+            textAlign="center"
+            mt={4}
+            role="region"
+            aria-labelledby="empty-state-title"
+          >
+            <Typography
+              id="empty-state-title"
+              variant="h6"
+              color="text.secondary"
+              gutterBottom
+            >
               No programs yet
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -269,31 +388,67 @@ export default function ProgramsPage() {
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Grid
+            container
+            spacing={3}
+            component="section"
+            aria-labelledby="programs-list-title"
+          >
+            <Typography
+              id="programs-list-title"
+              variant="h2"
+              component="h2"
+              sx={{ position: 'absolute', left: '-10000px' }}
+            >
+              Workout Programs List
+            </Typography>
             {programs.map((program) => (
               <Grid item xs={12} sm={6} md={4} key={program.id}>
                 <motion.div
                   whileHover={{ scale: 1.03 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Card>
+                  <Card
+                    component="article"
+                    aria-labelledby={`program-title-${program.id}`}
+                  >
                     <CardContent>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Typography variant="h5" component="div">
-                          {program.name}
+                        <Typography
+                          id={`program-title-${program.id}`}
+                          variant="h5"
+                          component="h3"
+                        >
+                          {sanitizeString(program.name)}
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <IconButton
                             onClick={() => handleOpenEditProgramModal(program)}
+                            aria-label={`Edit ${program.name} program`}
                             color="primary"
                             size="small"
+                            sx={{
+                              '&:focus': {
+                                outline: '2px solid',
+                                outlineColor: 'primary.main',
+                                outlineOffset: '2px'
+                              }
+                            }}
                           >
                             <EditIcon />
                           </IconButton>
                           <IconButton
                             onClick={() => deleteProgram(program.id)}
+                            aria-label={`Delete ${program.name} program`}
                             color="error"
                             size="small"
+                            sx={{
+                              '&:focus': {
+                                outline: '2px solid',
+                                outlineColor: 'error.main',
+                                outlineOffset: '2px'
+                              }
+                            }}
                           >
                             <DeleteIcon />
                           </IconButton>
@@ -302,14 +457,17 @@ export default function ProgramsPage() {
                       <Typography variant="body2" color="text.secondary" gutterBottom>
                         Exercises:
                       </Typography>
-                      <List dense>
+                      <List
+                        dense
+                        aria-label={`Exercises in ${program.name}`}
+                      >
                         {program.exercises.map((exercise, index) => (
                           <ListItem key={index} disablePadding>
                             <ListItemText
                               primary={
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                   <Typography variant="body2">
-                                    {exercise.name || exercise}
+                                    {sanitizeString(exercise.name || exercise)}
                                   </Typography>
                                   {exercise.sets && exercise.reps && (
                                     <Chip
@@ -336,11 +494,16 @@ export default function ProgramsPage() {
 
       <Fab
         color="primary"
-        aria-label="add"
+        aria-label="Create new workout program"
         sx={{
           position: 'fixed',
           bottom: 80,
           right: 16,
+          '&:focus': {
+            outline: '3px solid',
+            outlineColor: 'primary.main',
+            outlineOffset: '2px'
+          }
         }}
         onClick={handleOpenNewProgramModal}
       >
@@ -350,38 +513,91 @@ export default function ProgramsPage() {
       <Modal
         open={modalOpen}
         onClose={handleCloseModal}
-        aria-labelledby="modal-modal-title"
-        aria-describedby="modal-modal-description"
+        aria-labelledby={modalTitleId}
+        aria-describedby="modal-description"
+        closeAfterTransition
+        disableAutoFocus={false}
+        disableEnforceFocus={false}
+        disableRestoreFocus={false}
       >
         <Box sx={modalStyle}>
-          <Typography id="modal-modal-title" variant="h6" component="h2" gutterBottom>
+          <Typography
+            id={modalTitleId}
+            variant="h6"
+            component="h2"
+            gutterBottom
+          >
             {editingProgram ? 'Edit Program' : 'Create New Program'}
+          </Typography>
+          <Typography
+            id="modal-description"
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2, sr: 'only' }}
+          >
+            {editingProgram ? 'Modify the program details below' : 'Fill out the form below to create a new workout program'}
           </Typography>
 
           <TextField
+            id="program-name-input"
             fullWidth
             label="Program Name"
             value={newProgram.name}
             onChange={handleProgramNameChange}
             margin="normal"
             required
+            inputProps={{
+              'aria-describedby': 'program-name-help',
+              maxLength: 100
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderWidth: '2px'
+                }
+              }
+            }}
           />
+          <Typography
+            id="program-name-help"
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.5, mb: 2 }}
+          >
+            Give your workout program a descriptive name
+          </Typography>
 
-          <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>
+          <Typography
+            variant="subtitle1"
+            component="h3"
+            sx={{ mt: 3, mb: 2 }}
+          >
             Exercises
           </Typography>
 
           {newProgram.exercises.map((exercise, index) => (
             <Box key={index} sx={{ mb: 3, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  component="h4"
+                  sx={{ flexGrow: 1 }}
+                >
                   Exercise {index + 1}
                 </Typography>
                 {newProgram.exercises.length > 1 && (
                   <IconButton
                     onClick={() => removeExercise(index)}
+                    aria-label={`Remove exercise ${index + 1}`}
                     color="error"
                     size="small"
+                    sx={{
+                      '&:focus': {
+                        outline: '2px solid',
+                        outlineColor: 'error.main',
+                        outlineOffset: '2px'
+                      }
+                    }}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -396,7 +612,19 @@ export default function ProgramsPage() {
                 margin="normal"
                 size="small"
                 required
+                inputProps={{
+                  'aria-describedby': `exercise-name-help-${index}`,
+                  maxLength: 100
+                }}
               />
+              <Typography
+                id={`exercise-name-help-${index}`}
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}
+              >
+                Enter the name of the exercise (e.g., Bench Press, Squats)
+              </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                 <TextField
@@ -405,7 +633,11 @@ export default function ProgramsPage() {
                   value={exercise.sets}
                   onChange={(e) => handleExerciseChange(index, 'sets', e.target.value)}
                   size="small"
-                  inputProps={{ min: 1, max: 10 }}
+                  inputProps={{
+                    min: 1,
+                    max: 20,
+                    'aria-describedby': `sets-help-${index}`
+                  }}
                   sx={{ flex: 1 }}
                 />
                 <TextField
@@ -414,10 +646,22 @@ export default function ProgramsPage() {
                   value={exercise.reps}
                   onChange={(e) => handleExerciseChange(index, 'reps', e.target.value)}
                   size="small"
-                  inputProps={{ min: 1, max: 50 }}
+                  inputProps={{
+                    min: 1,
+                    max: 100,
+                    'aria-describedby': `reps-help-${index}`
+                  }}
                   sx={{ flex: 1 }}
                 />
               </Box>
+              <Typography
+                id={`sets-help-${index}`}
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.5, fontSize: '0.6rem' }}
+              >
+                Number of sets (1-20) and repetitions (1-100) for this exercise
+              </Typography>
             </Box>
           ))}
 
@@ -425,7 +669,15 @@ export default function ProgramsPage() {
             variant="outlined"
             onClick={addExercise}
             startIcon={<AddIcon />}
-            sx={{ mb: 3 }}
+            aria-label="Add another exercise to the program"
+            sx={{
+              mb: 3,
+              '&:focus': {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                outlineOffset: '2px'
+              }
+            }}
             fullWidth
           >
             Add Another Exercise
@@ -434,7 +686,17 @@ export default function ProgramsPage() {
           <Divider sx={{ mb: 2 }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button onClick={handleCloseModal} disabled={loading}>
+            <Button
+              onClick={handleCloseModal}
+              disabled={loading}
+              sx={{
+                '&:focus': {
+                  outline: '2px solid',
+                  outlineColor: 'text.primary',
+                  outlineOffset: '2px'
+                }
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -452,6 +714,13 @@ export default function ProgramsPage() {
                   }
                 })
               }
+              sx={{
+                '&:focus': {
+                  outline: '2px solid',
+                  outlineColor: 'primary.light',
+                  outlineOffset: '2px'
+                }
+              }}
             >
               {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Create Program'}
             </Button>

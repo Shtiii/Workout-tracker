@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Workouts
+    match /workouts/{workoutId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Programs
+    match /programs/{programId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Exercise database (read-only for all authenticated users)
+    match /exercises/{exerciseId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'moderator'];
+    }
+    
+    // Program templates (read-only for all authenticated users)
+    match /program_templates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'moderator'];
+    }
+    
+    // User consents
+    match /user_consents/{consentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Data processing records
+    match /data_processing_records/{recordId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Audit logs (admin only)
+    match /audit_logs/{logId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Security settings (admin only)
+    match /security_settings/{settingId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Analytics data (read-only for users, write for system)
+    match /analytics/{analyticsId} {
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow write: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Performance metrics (admin only)
+    match /performance_metrics/{metricId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+  }
+}

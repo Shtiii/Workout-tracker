@@ -914,7 +914,14 @@ export default function AnalyticsPage() {
                   <IconButton
                     edge="end"
                     onClick={() => deleteWorkout(workout.id)}
-                    sx={{ color: '#ff4444' }}
+                    aria-label={`Delete workout: ${workout.programName || 'Custom Workout'}`}
+                    sx={{
+                      color: '#ff4444',
+                      '&:focus': {
+                        outline: '2px solid #ff4444',
+                        outlineOffset: '2px'
+                      }
+                    }}
                   >
                     <DeleteIcon />
                   </IconButton>
