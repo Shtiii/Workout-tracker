@@ -46,6 +46,7 @@ const modalStyle = {
 };
 
 export default function ProgramsPage() {
+
   const [programs, setPrograms] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -106,23 +107,25 @@ export default function ProgramsPage() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleOpenModal = (program = null) => {
-    // Force complete state reset first
+  const handleOpenNewProgramModal = () => {
     setEditingProgram(null);
     setNewProgram({
       name: '',
       exercises: [{ name: '', sets: 3, reps: 10 }]
     });
+    setModalOpen(true);
+  };
 
-    // Then set the appropriate state
-    if (program && program.id) {
-      setEditingProgram(program);
-      setNewProgram({
-        name: program.name || '',
-        exercises: program.exercises || [{ name: '', sets: 3, reps: 10 }]
-      });
+  const handleOpenEditProgramModal = (program) => {
+    if (!program || !program.id) {
+      console.error('Invalid program for editing:', program);
+      return;
     }
-
+    setEditingProgram(program);
+    setNewProgram({
+      name: program.name || '',
+      exercises: program.exercises || [{ name: '', sets: 3, reps: 10 }]
+    });
     setModalOpen(true);
   };
 
@@ -167,6 +170,7 @@ export default function ProgramsPage() {
     }
 
 
+
     // Validation
     if (!newProgram?.name?.trim()) {
       showSnackbar('Please enter a program name', 'error');
@@ -195,16 +199,13 @@ export default function ProgramsPage() {
         updatedAt: new Date()
       };
 
-      // Force create new program if no valid ID exists
-      const isValidUpdate = editingProgram && editingProgram.id && typeof editingProgram.id === 'string' && editingProgram.id.length > 0;
-
-      if (isValidUpdate) {
-        // Update existing program - only if we have a valid ID
+      if (editingProgram && editingProgram.id) {
+        // UPDATE existing program
         programData.createdAt = editingProgram.createdAt || new Date();
         await updateDoc(doc(db, 'programs', editingProgram.id), programData);
         showSnackbar('Program updated successfully!', 'success');
       } else {
-        // Create new program - either editingProgram is null, has no ID, or invalid ID
+        // CREATE new program
         programData.createdAt = new Date();
         const docRef = await addDoc(collection(db, 'programs'), programData);
         showSnackbar('Program created successfully!', 'success');
@@ -283,7 +284,7 @@ export default function ProgramsPage() {
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <IconButton
-                            onClick={() => handleOpenModal(program)}
+                            onClick={() => handleOpenEditProgramModal(program)}
                             color="primary"
                             size="small"
                           >
@@ -341,7 +342,7 @@ export default function ProgramsPage() {
           bottom: 80,
           right: 16,
         }}
-        onClick={handleOpenModal}
+        onClick={handleOpenNewProgramModal}
       >
         <AddIcon />
       </Fab>
@@ -452,7 +453,7 @@ export default function ProgramsPage() {
                 })
               }
             >
-              {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Save Program'}
+              {loading ? 'Saving...' : editingProgram ? 'Update Program' : 'Create Program'}
             </Button>
           </Box>
         </Box>
