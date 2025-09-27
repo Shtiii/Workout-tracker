@@ -1,18 +1,22 @@
 'use client';
 
+import { memo } from 'react';
 import {
   Paper,
   Typography,
-  Button
+  Button,
+  Box
 } from '@mui/material';
+import { motion } from 'framer-motion';
 
 /**
- * WorkoutActions Component
- * Displays finish workout button and empty state
+ * Workout Actions Component
+ * Handles workout completion and empty state
  */
-export default function WorkoutActions({
+const WorkoutActions = memo(function WorkoutActions({
   activeWorkout,
-  onFinishWorkout
+  onFinishWorkout,
+  onAddExercise
 }) {
   if (activeWorkout.exercises.length === 0) {
     return (
@@ -27,9 +31,28 @@ export default function WorkoutActions({
         <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
           No exercises added yet
         </Typography>
-        <Typography color="text.secondary">
+        <Typography color="text.secondary" sx={{ mb: 3 }}>
           Select a program or add custom exercises to start your workout! 💪
         </Typography>
+        <Button
+          variant="contained"
+          onClick={onAddExercise}
+          aria-label="Add exercise to workout"
+          sx={{
+            background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+            px: 4,
+            py: 1.5,
+            '&:hover': {
+              background: 'linear-gradient(135deg, #ff6666, #ee0000)',
+              transform: 'translateY(-2px)'
+            }
+          }}
+        >
+          Add Exercise
+        </Button>
       </Paper>
     );
   }
@@ -43,28 +66,11 @@ export default function WorkoutActions({
         mb: 3
       }}
     >
-      <Typography
-        variant="h6"
-        sx={{
-          mb: 3,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          fontSize: { xs: '1.1rem', sm: '1.25rem' },
-          lineHeight: 1.2,
-          textAlign: 'center',
-          background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
-          backgroundClip: 'text',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}
-      >
-        EXERCISES
-      </Typography>
-
       <Button
         variant="contained"
         onClick={onFinishWorkout}
         disabled={!activeWorkout.exercises.some(ex => ex.sets.length > 0)}
+        aria-label="Finish and save workout"
         sx={{
           background: 'linear-gradient(135deg, #ff4444, #cc0000)',
           fontWeight: 700,
@@ -89,4 +95,6 @@ export default function WorkoutActions({
       </Button>
     </Paper>
   );
-}
+});
+
+export default WorkoutActions;

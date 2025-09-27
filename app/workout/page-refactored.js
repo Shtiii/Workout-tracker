@@ -171,7 +171,7 @@ export default function WorkoutPage() {
       }, 1000);
     } else if (restTimer.timeLeft === 0 && restTimer.isActive) {
       setRestTimer(prev => ({ ...prev, isActive: false }));
-      if ('vibrate' in navigator) {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate([200, 100, 200]);
       }
     }
@@ -180,6 +180,9 @@ export default function WorkoutPage() {
 
   // Screen wake lock management
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+
     const requestWakeLock = async () => {
       try {
         if ('wakeLock' in navigator && timer.isRunning) {
@@ -430,7 +433,7 @@ export default function WorkoutPage() {
     updatedWorkout.exercises[exerciseIndex].sets[setIndex].completed = !wasCompleted;
     setActiveWorkout(updatedWorkout);
 
-    if (!wasCompleted && 'vibrate' in navigator) {
+    if (!wasCompleted && typeof window !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate([50, 50, 50]);
     }
 
@@ -747,7 +750,11 @@ export default function WorkoutPage() {
           loading={loading}
           onProgramSelect={handleProgramSelect}
           onAddExercise={() => setModalOpen(true)}
-          onManagePrograms={() => window.location.href = '/programs'}
+          onManagePrograms={() => {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/programs';
+            }
+          }}
           onRestSettings={handleRestSettings}
           restSettings={restSettings}
           autoAdvanceEnabled={autoAdvanceEnabled}

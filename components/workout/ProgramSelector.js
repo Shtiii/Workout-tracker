@@ -107,7 +107,11 @@ export default function ProgramSelector({
         {/* Manage Programs Button */}
         <Button
           variant="outlined"
-          onClick={() => window.location.href = '/programs'}
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/programs';
+            }
+          }}
           sx={{
             fontWeight: 600,
             textTransform: 'uppercase',

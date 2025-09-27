@@ -72,7 +72,9 @@ class ErrorBoundary extends Component {
   };
 
   handleReload = () => {
-    window.location.reload();
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
   };
 
   render() {

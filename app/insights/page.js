@@ -282,7 +282,9 @@ export default function EnhancedInsightsPage() {
   // Handle add workout
   const handleAddWorkout = () => {
     // Navigate to workout page or open workout modal
-    window.location.href = '/workout';
+    if (typeof window !== 'undefined') {
+      window.location.href = '/workout';
+    }
   };
 
   // Handle break streak
