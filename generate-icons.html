@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+<body>
+    <canvas id="canvas192" width="192" height="192" style="display: none;"></canvas>
+    <canvas id="canvas512" width="512" height="512" style="display: none;"></canvas>
+    <canvas id="canvas180" width="180" height="180" style="display: none;"></canvas>
+
+    <div>
+        <h3>192x192 Icon:</h3>
+        <img id="img192" />
+        <br><a id="download192" download="icon-192x192.png">Download 192x192</a>
+    </div>
+
+    <div>
+        <h3>512x512 Icon:</h3>
+        <img id="img512" />
+        <br><a id="download512" download="icon-512x512.png">Download 512x512</a>
+    </div>
+
+    <div>
+        <h3>180x180 Apple Icon:</h3>
+        <img id="img180" />
+        <br><a id="download180" download="icon-apple-touch.png">Download 180x180</a>
+    </div>
+
+    <script>
+        function createDumbbellIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 192;
+
+            // Background with rounded corners
+            const radius = size * 0.125;
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fill();
+
+            // Center the dumbbell
+            const centerX = size / 2;
+            const centerY = size / 2;
+
+            // Main bar
+            const barWidth = 56 * scale;
+            const barHeight = 8 * scale;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(centerX - barWidth/2, centerY - barHeight/2, barWidth, barHeight);
+
+            // Left weight
+            const weightSize = 16 * scale;
+            const leftX = centerX - barWidth/2 - weightSize/2;
+            ctx.beginPath();
+            ctx.roundRect(leftX, centerY - weightSize/2, weightSize, weightSize, weightSize/2);
+            ctx.fill();
+
+            // Right weight
+            const rightX = centerX + barWidth/2 - weightSize/2;
+            ctx.beginPath();
+            ctx.roundRect(rightX, centerY - weightSize/2, weightSize, weightSize, weightSize/2);
+            ctx.fill();
+
+            // Inner circles
+            const innerRadius = 4 * scale;
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.arc(leftX + weightSize/2, centerY, innerRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(rightX + weightSize/2, centerY, innerRadius, 0, 2 * Math.PI);
+            ctx.fill();
+
+            return canvas.toDataURL('image/png');
+        }
+
+        // Generate icons
+        const canvas192 = document.getElementById('canvas192');
+        const canvas512 = document.getElementById('canvas512');
+        const canvas180 = document.getElementById('canvas180');
+
+        const dataUrl192 = createDumbbellIcon(canvas192, 192);
+        const dataUrl512 = createDumbbellIcon(canvas512, 512);
+        const dataUrl180 = createDumbbellIcon(canvas180, 180);
+
+        // Display images
+        document.getElementById('img192').src = dataUrl192;
+        document.getElementById('img512').src = dataUrl512;
+        document.getElementById('img180').src = dataUrl180;
+
+        // Set download links
+        document.getElementById('download192').href = dataUrl192;
+        document.getElementById('download512').href = dataUrl512;
+        document.getElementById('download180').href = dataUrl180;
+
+        console.log('Icons generated successfully!');
+    </script>
+</body>
+</html>

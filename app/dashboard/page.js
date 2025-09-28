@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Container,
@@ -9,34 +9,52 @@ import {
   Grid,
   Card,
   CardContent,
-  Tabs,
-  Tab,
   Button,
   Paper,
-  LinearProgress,
-  Chip,
-  IconButton
+  IconButton,
+  Modal,
+  TextField,
+  Snackbar,
+  Alert,
+  Checkbox,
+  FormControlLabel,
+  List,
+  ListItem,
+  Divider
 } from '@mui/material';
 import {
   FitnessCenter as FitnessCenterIcon,
-  Timer as TimerIcon,
   EmojiEvents as TrophyIcon,
   TrendingUp as TrendingUpIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   Stop as StopIcon,
-  Add as AddIcon
+  Delete as DeleteIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { collection, getDocs, addDoc, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, deleteDoc, doc, setDoc, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+const modalStyle = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: '#1a1a1a',
+  border: '2px solid #ff4444',
+  borderRadius: 2,
+  boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+  p: 4,
+};
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(0);
+  // const [activeTab, setActiveTab] = useState(0);
   const [workouts, setWorkouts] = useState([]);
-  const [programs, setPrograms] = useState([]);
-  const [goals, setGoals] = useState([]);
+  // const [programs, setPrograms] = useState([]);
+  // const [goals, setGoals] = useState([]);
   const [records, setRecords] = useState({});
   const [stats, setStats] = useState({
     totalWorkouts: 0,
@@ -44,15 +62,243 @@ export default function DashboardPage() {
     weeklyGoal: '0/3',
     totalExercises: 0
   });
+  const [weeklyGoalTarget, setWeeklyGoalTarget] = useState(3);
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [newGoalTarget, setNewGoalTarget] = useState(3);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [achievements, setAchievements] = useState([]);
   const [timer, setTimer] = useState({
     time: 0,
     isRunning: false,
     startTime: null
   });
+  const [workoutTemplates, setWorkoutTemplates] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [quickStartSettings, setQuickStartSettings] = useState([]);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+
+  const fetchWeeklyGoal = useCallback(async () => {
+    try {
+      if (!db) {
+        console.warn('Firebase not available for fetching weekly goal');
+        return;
+      }
+
+      const goalDoc = await getDocs(query(collection(db, 'settings')));
+      const settings = goalDoc.docs.find(doc => doc.id === 'weeklyGoal');
+      if (settings) {
+        const target = settings.data().target || 3;
+        console.log('Fetched weekly goal from Firebase:', target);
+        setWeeklyGoalTarget(target);
+        setNewGoalTarget(target);
+      } else {
+        console.log('No weekly goal found in Firebase, using default value: 3');
+        // Create default weekly goal if it doesn't exist
+        await setDoc(doc(db, 'settings', 'weeklyGoal'), {
+          target: 3,
+          updatedAt: new Date()
+        });
+        setWeeklyGoalTarget(3);
+        setNewGoalTarget(3);
+      }
+    } catch (error) {
+      console.error('Error fetching weekly goal:', error);
+      // Use default value on error
+      setWeeklyGoalTarget(3);
+      setNewGoalTarget(3);
+    }
+  }, []);
+
+  const fetchPrograms = useCallback(async () => {
+    try {
+      if (!db) {
+        console.warn('Firebase not available for fetching programs');
+        return;
+      }
+
+      const programsSnapshot = await getDocs(collection(db, 'programs'));
+      const programsData = programsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPrograms(programsData.filter(program => !program.isTemplate)); // Exclude template programs
+      console.log('Fetched programs for quick start:', programsData);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    }
+  }, []);
+
+  const fetchQuickStartSettings = useCallback(async () => {
+    try {
+      if (!db) return;
+
+      const settingsSnapshot = await getDocs(query(collection(db, 'settings')));
+      const quickStartDoc = settingsSnapshot.docs.find(doc => doc.id === 'quickStartWorkouts');
+
+      if (quickStartDoc) {
+        setQuickStartSettings(quickStartDoc.data().programIds || []);
+      } else {
+        // Default: show all programs if no settings exist
+        setQuickStartSettings([]);
+      }
+    } catch (error) {
+      console.error('Error fetching quick start settings:', error);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch workouts
+      const workoutsQuery = query(
+        collection(db, 'workoutSessions'),
+        orderBy('completedAt', 'desc')
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const workoutsData = workoutsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        completedAt: doc.data().completedAt?.toDate()
+      }));
+      setWorkouts(workoutsData);
+
+      // Fetch programs and quick start settings
+      await fetchPrograms();
+      await fetchQuickStartSettings();
+
+      // Fetch weekly goal target
+      await fetchWeeklyGoal();
+
+      // Calculate stats
+      calculateStats(workoutsData, weeklyGoalTarget);
+      calculateRecords(workoutsData);
+
+      // Generate workout templates based on programs after they're loaded
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  }, [fetchWeeklyGoal, fetchPrograms, fetchQuickStartSettings]);
+
+
+  const generateWorkoutTemplatesFromPrograms = useCallback(() => {
+    if (programs.length === 0) return;
+
+    const templates = [];
+
+    // Get selected programs (or all if none selected)
+    const selectedPrograms = quickStartSettings.length > 0
+      ? programs.filter(program => quickStartSettings.includes(program.id))
+      : programs.slice(0, 4); // Show first 4 programs if no selection
+
+    selectedPrograms.forEach(program => {
+      if (program.exercises && program.exercises.length > 0) {
+        templates.push({
+          name: `🔥 ${program.name}`,
+          description: program.description || `${program.name} workout program`,
+          exercises: program.exercises.map(ex => ({
+            name: ex.name,
+            targetSets: ex.sets || ex.targetSets || 3,
+            targetReps: ex.reps || ex.targetReps || 10
+          })),
+          programId: program.id,
+          isFromProgram: true
+        });
+      }
+    });
+
+    // Add fallback templates if no programs or selected programs
+    if (templates.length === 0) {
+      templates.push(
+        {
+          name: '💪 Push Day',
+          description: 'Chest, shoulders, and triceps workout',
+          exercises: [
+            { name: 'Bench Press', targetSets: 4, targetReps: 8 },
+            { name: 'Overhead Press', targetSets: 3, targetReps: 10 },
+            { name: 'Dumbbell Flyes', targetSets: 3, targetReps: 12 },
+            { name: 'Tricep Dips', targetSets: 3, targetReps: 10 }
+          ]
+        },
+        {
+          name: '🏃 Pull Day',
+          description: 'Back and biceps workout',
+          exercises: [
+            { name: 'Pull-ups', targetSets: 4, targetReps: 8 },
+            { name: 'Bent-over Row', targetSets: 3, targetReps: 10 },
+            { name: 'Lat Pulldown', targetSets: 3, targetReps: 12 },
+            { name: 'Bicep Curls', targetSets: 3, targetReps: 12 }
+          ]
+        },
+        {
+          name: '🦵 Leg Day',
+          description: 'Lower body workout',
+          exercises: [
+            { name: 'Squats', targetSets: 4, targetReps: 10 },
+            { name: 'Deadlifts', targetSets: 3, targetReps: 8 },
+            { name: 'Lunges', targetSets: 3, targetReps: 12 },
+            { name: 'Calf Raises', targetSets: 3, targetReps: 15 }
+          ]
+        }
+      );
+    }
+
+    setWorkoutTemplates(templates.slice(0, 4)); // Show max 4 templates
+  }, [programs, quickStartSettings]);
+
+  const saveQuickStartSettings = useCallback(async (selectedProgramIds) => {
+    try {
+      if (!db) return;
+
+      await setDoc(doc(db, 'settings', 'quickStartWorkouts'), {
+        programIds: selectedProgramIds,
+        updatedAt: new Date()
+      });
+
+      setQuickStartSettings(selectedProgramIds);
+      setSnackbar({ open: true, message: 'Quick start workouts updated! 🚀', severity: 'success' });
+    } catch (error) {
+      console.error('Error saving quick start settings:', error);
+      setSnackbar({ open: true, message: 'Error updating quick start workouts', severity: 'error' });
+    }
+  }, []);
+
+  const startTemplateWorkout = async (template) => {
+    try {
+      // If template is from a program, redirect directly to workout with program ID
+      if (template.isFromProgram && template.programId) {
+        router.push(`/workout?programId=${template.programId}`);
+        return;
+      }
+
+      // Create a new program in Firebase based on the template
+      const programData = {
+        name: template.name,
+        exercises: template.exercises,
+        createdAt: new Date(),
+        isTemplate: true
+      };
+
+      const programRef = await addDoc(collection(db, 'programs'), programData);
+
+      // Redirect to workout page with the new program
+      router.push(`/workout?programId=${programRef.id}&template=true`);
+    } catch (error) {
+      console.error('Error creating template workout:', error);
+      // Fallback: redirect to workout page with template data in URL
+      const exercisesParam = encodeURIComponent(JSON.stringify(template.exercises));
+      router.push(`/workout?template=${template.name}&exercises=${exercisesParam}`);
+    }
+  };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  // Generate workout templates when programs or settings change
+  useEffect(() => {
+    if (programs.length > 0) {
+      generateWorkoutTemplatesFromPrograms();
+    }
+  }, [programs, quickStartSettings, generateWorkoutTemplatesFromPrograms]);
 
   useEffect(() => {
     let interval = null;
@@ -69,41 +315,22 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [timer.isRunning, timer.startTime]);
 
-  const fetchData = async () => {
-    try {
-      // Fetch workouts
-      const workoutsQuery = query(
-        collection(db, 'workoutSessions'),
-        orderBy('completedAt', 'desc')
-      );
-      const workoutsSnapshot = await getDocs(workoutsQuery);
-      const workoutsData = workoutsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        completedAt: doc.data().completedAt?.toDate()
-      }));
-      setWorkouts(workoutsData);
-
-      // Fetch programs
-      const programsSnapshot = await getDocs(collection(db, 'programs'));
-      const programsData = programsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setPrograms(programsData);
-
-      // Calculate stats
-      calculateStats(workoutsData);
-      calculateRecords(workoutsData);
-    } catch (error) {
-      console.error('Error fetching data:', error);
+  const deleteWorkout = useCallback(async (workoutId) => {
+    if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+      try {
+        await deleteDoc(doc(db, 'workoutSessions', workoutId));
+        // Refresh data after deletion
+        fetchData();
+      } catch (error) {
+        console.error('Error deleting workout:', error);
+      }
     }
-  };
+  }, [fetchData]);
 
-  const calculateStats = (workoutsData) => {
+  const calculateStats = (workoutsData, goalTarget = weeklyGoalTarget) => {
     const totalWorkouts = workoutsData.length;
     const currentStreak = calculateStreak(workoutsData);
-    const weeklyGoal = calculateWeeklyProgress(workoutsData);
+    const weeklyGoal = calculateWeeklyProgress(workoutsData, goalTarget);
 
     setStats({
       totalWorkouts,
@@ -111,6 +338,10 @@ export default function DashboardPage() {
       weeklyGoal,
       totalExercises: calculateUniqueExercises(workoutsData)
     });
+
+    // Calculate achievements
+    const userAchievements = calculateAchievements(workoutsData);
+    setAchievements(userAchievements);
   };
 
   const calculateStreak = (workoutsData) => {
@@ -136,17 +367,18 @@ export default function DashboardPage() {
     return streak;
   };
 
-  const calculateWeeklyProgress = (workoutsData) => {
+  const calculateWeeklyProgress = useCallback((workoutsData, targetGoal = weeklyGoalTarget) => {
     const now = new Date();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
     weekStart.setHours(0, 0, 0, 0);
 
-    const weekWorkouts = workoutsData.filter(w =>
-      new Date(w.completedAt) >= weekStart
-    ).length;
+    const weekWorkouts = workoutsData.filter(w => {
+      const workoutDate = new Date(w.completedAt);
+      return workoutDate >= weekStart;
+    }).length;
 
-    return `${weekWorkouts}/3`;
-  };
+    return `${weekWorkouts}/${targetGoal}`;
+  }, [weeklyGoalTarget]);
 
   const calculateUniqueExercises = (workoutsData) => {
     const exercises = new Set();
@@ -183,11 +415,12 @@ export default function DashboardPage() {
   };
 
   const startTimer = () => {
-    setTimer({
-      time: 0,
+    setTimer(prev => ({
+      ...prev,
       isRunning: true,
-      startTime: Date.now()
-    });
+      startTime: Date.now() - (prev.time * 1000)
+    }));
+    announceTimerUpdate('Workout timer started');
   };
 
   const pauseTimer = () => {
@@ -195,82 +428,248 @@ export default function DashboardPage() {
       ...prev,
       isRunning: false
     }));
+    announceTimerUpdate(`Workout timer paused at ${formatTime(timer.time)}`);
   };
 
   const stopTimer = () => {
+    const finalTime = formatTime(timer.time);
     setTimer({
       time: 0,
       isRunning: false,
       startTime: null
     });
+    announceTimerUpdate(`Workout timer stopped. Total time was ${finalTime}`);
+  };
+
+  const handleGoalModalOpen = () => {
+    setNewGoalTarget(weeklyGoalTarget);
+    setGoalModalOpen(true);
+  };
+
+  const handleGoalModalClose = () => {
+    setGoalModalOpen(false);
+    setNewGoalTarget(weeklyGoalTarget);
+  };
+
+  const saveWeeklyGoal = async () => {
+    if (!newGoalTarget || newGoalTarget < 1) {
+      setSnackbar({ open: true, message: 'Please enter a valid goal target', severity: 'error' });
+      return;
+    }
+
+    try {
+      const goalTarget = parseInt(newGoalTarget);
+      console.log('Saving weekly goal:', goalTarget);
+
+      // Check if Firebase is available
+      if (!db) {
+        throw new Error('Firebase not initialized');
+      }
+
+      // Save to Firebase
+      await setDoc(doc(db, 'settings', 'weeklyGoal'), {
+        target: goalTarget,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      console.log('Firebase save successful');
+
+      // Update local state
+      setWeeklyGoalTarget(goalTarget);
+      setGoalModalOpen(false);
+
+      // Recalculate stats with new goal immediately
+      const weeklyGoal = calculateWeeklyProgress(workouts, goalTarget);
+      setStats(prevStats => ({
+        ...prevStats,
+        weeklyGoal
+      }));
+
+      setSnackbar({ open: true, message: 'Weekly goal updated! 🎯', severity: 'success' });
+      console.log('Weekly goal updated successfully to:', goalTarget);
+
+    } catch (error) {
+      console.error('Error saving weekly goal:', error);
+      setSnackbar({ open: true, message: `Error saving goal: ${error.message}`, severity: 'error' });
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const calculateAchievements = useCallback((workoutsData) => {
+    const achievementsList = [];
+
+    // First Workout
+    if (workoutsData.length >= 1) {
+      achievementsList.push({
+        id: 'first_workout',
+        title: 'First Steps',
+        description: 'Completed your first workout',
+        icon: '🏃‍♂️',
+        earned: true,
+        date: workoutsData[workoutsData.length - 1]?.completedAt
+      });
+    }
+
+    // Workout Milestones
+    const milestones = [5, 10, 25, 50, 100];
+    milestones.forEach(milestone => {
+      if (workoutsData.length >= milestone) {
+        achievementsList.push({
+          id: `workouts_${milestone}`,
+          title: `${milestone} Workouts`,
+          description: `Completed ${milestone} total workouts`,
+          icon: milestone === 100 ? '💯' : milestone >= 50 ? '🏆' : milestone >= 25 ? '🥇' : milestone >= 10 ? '🥈' : '🥉',
+          earned: true,
+          date: workoutsData[workoutsData.length - milestone]?.completedAt
+        });
+      }
+    });
+
+    // Calculate current streak
+    const today = new Date();
+    let currentStreak = 0;
+    const sortedWorkouts = [...workoutsData].sort((a, b) => b.completedAt - a.completedAt);
+
+    for (let workout of sortedWorkouts) {
+      const workoutDate = new Date(workout.completedAt);
+      const daysDiff = Math.floor((today - workoutDate) / (1000 * 60 * 60 * 24));
+
+      if (daysDiff <= currentStreak + 1) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    // Streak Achievements
+    const streakMilestones = [3, 7, 14, 30];
+    streakMilestones.forEach(streak => {
+      if (currentStreak >= streak) {
+        achievementsList.push({
+          id: `streak_${streak}`,
+          title: `${streak} Day Streak`,
+          description: `Worked out for ${streak} consecutive days`,
+          icon: streak >= 30 ? '🔥🔥🔥' : streak >= 14 ? '🔥🔥' : '🔥',
+          earned: true,
+          date: new Date()
+        });
+      }
+    });
+
+    // Volume Achievements
+    const totalVolume = workoutsData.reduce((sum, workout) => sum + (workout.totalVolume || 0), 0);
+    const volumeMilestones = [1000, 5000, 10000, 25000, 50000];
+    volumeMilestones.forEach(volume => {
+      if (totalVolume >= volume) {
+        achievementsList.push({
+          id: `volume_${volume}`,
+          title: `${volume.toLocaleString()}kg Moved`,
+          description: `Lifted ${volume.toLocaleString()}kg total volume`,
+          icon: volume >= 50000 ? '💪💪💪' : volume >= 25000 ? '💪💪' : '💪',
+          earned: true,
+          date: new Date()
+        });
+      }
+    });
+
+    return achievementsList.sort((a, b) => b.date - a.date).slice(0, 6); // Latest 6 achievements
+  }, []);
+
+  // Screen reader announcements for timer updates
+  const announceTimerUpdate = (message) => {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.setAttribute('class', 'sr-only');
+    announcement.style.position = 'absolute';
+    announcement.style.left = '-10000px';
+    announcement.style.width = '1px';
+    announcement.style.height = '1px';
+    announcement.style.overflow = 'hidden';
+    announcement.textContent = message;
+    document.body.appendChild(announcement);
+    setTimeout(() => {
+      if (document.body.contains(announcement)) {
+        document.body.removeChild(announcement);
+      }
+    }, 1000);
   };
 
   // Memoized StatCard component for better performance
-  const StatCard = memo(({ title, value, icon, gradient }) => (
-    <motion.div
-      whileHover={{ scale: 1.02, y: -2 }}
-      transition={{ duration: 0.2 }}
-    >
-      <Card
-        sx={{
-          background: `linear-gradient(135deg, ${gradient})`,
-          border: '1px solid rgba(255, 68, 68, 0.2)',
-          position: 'relative',
-          overflow: 'hidden',
-          cursor: 'pointer',
-          height: { xs: 120, sm: 140 }, // Fixed height for consistency
-          '&:hover': {
-            border: '1px solid #ff4444',
-            boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
-          }
-        }}
+  const StatCard = memo(({ title, value, icon, gradient, onClick }) => {
+    const isClickable = !!onClick;
+    return (
+      <motion.div
+        whileHover={{ scale: 1.02, y: -2 }}
+        transition={{ duration: 0.2 }}
       >
-        <CardContent sx={{
-          textAlign: 'center',
-          py: { xs: 2, sm: 3 },
-          px: { xs: 1.5, sm: 3 },
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center'
-        }}>
-          <Box sx={{ mb: { xs: 1, sm: 2 }, color: 'primary.main' }}>
-            {icon}
-          </Box>
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              mb: { xs: 0.5, sm: 1 },
-              fontSize: { xs: '1.5rem', sm: '2rem', md: '3rem' },
-              lineHeight: 1.2
-            }}
-          >
-            {value}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'text.secondary',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              fontWeight: 600,
-              fontSize: { xs: '0.6rem', sm: '0.75rem' }
-            }}
-          >
-            {title}
-          </Typography>
-        </CardContent>
-      </Card>
-    </motion.div>
-  ));
+        <Card
+          sx={{
+            background: `linear-gradient(135deg, ${gradient})`,
+            border: '1px solid rgba(255, 68, 68, 0.2)',
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: onClick ? 'pointer' : 'default',
+            height: { xs: 120, sm: 140 }, // Fixed height for consistency
+            '&:hover': {
+              border: '1px solid #ff4444',
+              boxShadow: '0 0 30px rgba(255, 68, 68, 0.3)'
+            }
+          }}
+          onClick={onClick}
+        >
+          <CardContent sx={{
+            textAlign: 'center',
+            py: { xs: 2, sm: 3 },
+            px: { xs: 1.5, sm: 3 },
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center'
+          }}>
+            <Box sx={{ mb: { xs: 1, sm: 2 }, color: 'primary.main' }}>
+              {icon}
+            </Box>
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #ff4444, #ffaa00)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: { xs: 0.5, sm: 1 },
+                fontSize: { xs: '1.5rem', sm: '2rem', md: '3rem' },
+                lineHeight: 1.2
+              }}
+            >
+              {value}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                fontWeight: 600,
+                fontSize: { xs: '0.6rem', sm: '0.75rem' }
+              }}
+            >
+              {title}
+            </Typography>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  });
+
+  StatCard.displayName = 'StatCard';
 
   // Memoized WorkoutCard component
-  const WorkoutCard = memo(({ workout }) => (
+  const WorkoutCard = memo(({ workout, onDelete }) => (
     <motion.div
       whileHover={{ x: 3 }}
       transition={{ duration: 0.2 }}
@@ -306,16 +705,26 @@ export default function DashboardPage() {
             >
               {workout.programName || 'Workout'}
             </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                fontSize: { xs: '0.7rem', sm: '0.75rem' },
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {workout.completedAt?.toLocaleDateString()}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {workout.completedAt?.toLocaleDateString()}
+              </Typography>
+              <IconButton
+                onClick={() => onDelete(workout.id)}
+                color="error"
+                size="small"
+                sx={{ opacity: 0.7, '&:hover': { opacity: 1 } }}
+              >
+                <DeleteIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
           </Box>
           <Box sx={{ mb: 2 }}>
             {workout.exercises?.slice(0, 3).map((exercise, index) => (
@@ -338,7 +747,9 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </motion.div>
-  );
+  ));
+
+  WorkoutCard.displayName = 'WorkoutCard';
 
   return (
     <Box
@@ -385,31 +796,17 @@ export default function DashboardPage() {
           >
             SHTII PLANNER
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => router.push('/workout')}
-            sx={{
-              background: 'linear-gradient(135deg, #ff4444, #cc0000)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              minWidth: { xs: 'auto', sm: 120 },
-              px: { xs: 2, sm: 3 },
-              py: { xs: 1, sm: 1.5 },
-              fontSize: { xs: '0.8rem', sm: '0.875rem' }
-            }}
-          >
-            {/* Hide text on very small screens, show icon only */}
-            <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>Quick Add</Box>
-            <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>+</Box>
-          </Button>
         </Box>
       </Paper>
 
       <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 } }}>
         {/* Stats Bar */}
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 3 }}>
+        <Grid
+          container
+          spacing={{ xs: 1.5, sm: 2 }}
+          sx={{ mb: 3 }}
+          justifyContent="center"
+        >
           <Grid item xs={6} md={3}>
             <StatCard
               title="Total Workouts"
@@ -432,6 +829,7 @@ export default function DashboardPage() {
               value={stats.weeklyGoal}
               icon={<TrophyIcon sx={{ fontSize: 40 }} />}
               gradient="rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05)"
+              onClick={handleGoalModalOpen}
             />
           </Grid>
           <Grid item xs={6} md={3}>
@@ -443,6 +841,124 @@ export default function DashboardPage() {
             />
           </Grid>
         </Grid>
+
+        {/* Quick Workout Templates */}
+        {workoutTemplates.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mb: 3
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, textAlign: 'center', flex: 1 }}>
+                ⚡ QUICK START WORKOUTS
+              </Typography>
+              <IconButton
+                onClick={() => setSettingsModalOpen(true)}
+                sx={{
+                  color: 'primary.main',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 68, 68, 0.1)'
+                  }
+                }}
+                title="Customize quick start workouts"
+              >
+                <SettingsIcon />
+              </IconButton>
+            </Box>
+            <Grid container spacing={2}>
+              {workoutTemplates.map((template, index) => (
+                <Grid item xs={12} sm={6} md={3} key={index}>
+                  <motion.div
+                    whileHover={{ y: -3, scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Card
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                        border: '1px solid #333',
+                        cursor: 'pointer',
+                        height: '100%',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: '0 0 20px rgba(255, 68, 68, 0.3)'
+                        },
+                        transition: 'all 0.3s'
+                      }}
+                      onClick={() => startTemplateWorkout(template)}
+                    >
+                      <CardContent sx={{ p: 2.5, textAlign: 'center' }}>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 700,
+                            mb: 1,
+                            fontSize: { xs: '1rem', sm: '1.1rem' }
+                          }}
+                        >
+                          {template.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 2, fontSize: '0.85rem' }}
+                        >
+                          {template.description}
+                        </Typography>
+                        <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                          {template.exercises.length} exercises
+                        </Typography>
+                        {template.workoutCount && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                            Used {template.workoutCount} times
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
+
+        {/* Current Streak Highlight */}
+        {stats.currentStreak > 0 && (
+          <Paper
+            sx={{
+              background: 'linear-gradient(135deg, #1a1a1a, rgba(255, 170, 0, 0.1))',
+              border: '2px solid #ffaa00',
+              p: 3,
+              mb: 3,
+              textAlign: 'center'
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 1, color: '#ffaa00', fontWeight: 700 }}>
+              🔥 CURRENT STREAK
+            </Typography>
+            <Typography
+              variant="h2"
+              sx={{
+                fontWeight: 900,
+                background: 'linear-gradient(135deg, #ffaa00, #ff8800)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 1,
+                fontSize: { xs: '2.5rem', md: '3.5rem' }
+              }}
+            >
+              {stats.currentStreak} {stats.currentStreak === 1 ? 'Day' : 'Days'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Keep it up! You&apos;re building a strong fitness habit 💪
+            </Typography>
+          </Paper>
+        )}
 
         {/* Workout Timer */}
         <Paper
@@ -531,13 +1047,16 @@ export default function DashboardPage() {
             p: 3
           }}
         >
-          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
-            RECENT ACTIVITY
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+            RECENT ACTIVITY & PERSONAL RECORDS
           </Typography>
-          <Grid container spacing={3}>
+          <Grid container spacing={3} alignItems="flex-start">
             <Grid item xs={12} md={8}>
-              {workouts.slice(0, 5).map((workout, index) => (
-                <WorkoutCard key={workout.id} workout={workout} />
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+                🔥 RECENT WORKOUTS
+              </Typography>
+              {workouts.slice(0, 5).map((workout) => (
+                <WorkoutCard key={workout.id} workout={workout} onDelete={deleteWorkout} />
               ))}
               {workouts.length === 0 && (
                 <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
@@ -547,25 +1066,279 @@ export default function DashboardPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                PERSONAL RECORDS 🏆
+                💪 PERSONAL RECORDS
               </Typography>
               {Object.entries(records).slice(0, 5).map(([exercise, weight]) => (
-                <Box key={exercise} sx={{ mb: 2, p: 2, border: '1px solid #333', borderRadius: 1 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{exercise}</Typography>
-                  <Typography variant="h6" color="primary.main">
-                    {weight} lbs
-                  </Typography>
-                </Box>
+                <motion.div
+                  key={exercise}
+                  whileHover={{ x: 3 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card
+                    sx={{
+                      background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 68, 68, 0.05))',
+                      border: '1px solid #333',
+                      mb: { xs: 1.5, sm: 2 },
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 0 20px rgba(255, 68, 68, 0.2)'
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>
+                        {exercise}
+                      </Typography>
+                      <Typography variant="h6" color="primary.main">
+                        {weight} kg
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               ))}
               {Object.keys(records).length === 0 && (
-                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
                   No PRs yet. Start lifting heavy! 🏋️‍♂️
                 </Typography>
               )}
             </Grid>
           </Grid>
         </Paper>
+
+        {/* Achievements Section */}
+        {achievements.length > 0 && (
+          <Paper
+            sx={{
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              p: 3,
+              mt: 3
+            }}
+          >
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>
+              🏆 ACHIEVEMENTS
+            </Typography>
+            <Grid container spacing={2}>
+              {achievements.map((achievement) => (
+                <Grid item xs={12} sm={6} md={4} key={achievement.id}>
+                  <motion.div
+                    whileHover={{ y: -2, scale: 1.02 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Card
+                      sx={{
+                        background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(255, 215, 0, 0.1))',
+                        border: '2px solid #FFD700',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': {
+                          boxShadow: '0 0 30px rgba(255, 215, 0, 0.3)'
+                        },
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      <CardContent sx={{ textAlign: 'center', p: 2 }}>
+                        <Typography
+                          variant="h2"
+                          sx={{
+                            fontSize: '2.5rem',
+                            mb: 1
+                          }}
+                        >
+                          {achievement.icon}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 700,
+                            mb: 1,
+                            color: '#FFD700'
+                          }}
+                        >
+                          {achievement.title}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ fontSize: '0.8rem' }}
+                        >
+                          {achievement.description}
+                        </Typography>
+
+                        {/* Shine effect */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: 4,
+                            background: 'linear-gradient(90deg, #FFD700, #FFA500)',
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        )}
       </Container>
+
+      {/* Weekly Goal Modal */}
+      <Modal open={goalModalOpen} onClose={handleGoalModalClose}>
+        <Box sx={modalStyle}>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+            Set Weekly Goal 🎯
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            How many workouts do you want to complete per week?
+          </Typography>
+
+          <TextField
+            fullWidth
+            label="Weekly Workout Target"
+            type="number"
+            value={newGoalTarget}
+            onChange={(e) => setNewGoalTarget(e.target.value)}
+            inputProps={{ min: 1, max: 14 }}
+            sx={{
+              mb: 3,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: '#0a0a0a',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main'
+                }
+              }
+            }}
+          />
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+            <Button onClick={handleGoalModalClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={saveWeeklyGoal}
+              disabled={!newGoalTarget || newGoalTarget < 1}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700
+              }}
+            >
+              Save Goal
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Quick Start Settings Modal */}
+      <Modal open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: { xs: '90vw', sm: 600 },
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            bgcolor: '#1a1a1a',
+            border: '2px solid #ff4444',
+            borderRadius: 2,
+            boxShadow: '0 0 50px rgba(255, 68, 68, 0.3)',
+            p: 4,
+          }}
+        >
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
+            ⚙️ Customize Quick Start Workouts
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Select which programs should appear as quick start workouts on your dashboard.
+            Leave all unchecked to show the first 4 programs by default.
+          </Typography>
+
+          {programs.length === 0 ? (
+            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              No programs found. Create some programs first in the Programs section.
+            </Typography>
+          ) : (
+            <List sx={{ maxHeight: '400px', overflow: 'auto' }}>
+              {programs.map((program, index) => (
+                <Box key={program.id}>
+                  <ListItem>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={quickStartSettings.includes(program.id)}
+                          onChange={(e) => {
+                            const newSettings = e.target.checked
+                              ? [...quickStartSettings, program.id]
+                              : quickStartSettings.filter(id => id !== program.id);
+                            setQuickStartSettings(newSettings);
+                          }}
+                          sx={{
+                            color: 'primary.main',
+                            '&.Mui-checked': {
+                              color: 'primary.main',
+                            },
+                          }}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            {program.name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {program.exercises?.length || 0} exercises
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                  {index < programs.length - 1 && <Divider />}
+                </Box>
+              ))}
+            </List>
+          )}
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
+            <Button onClick={() => setSettingsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                saveQuickStartSettings(quickStartSettings);
+                setSettingsModalOpen(false);
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #ff4444, #cc0000)',
+                fontWeight: 700
+              }}
+            >
+              Save Settings
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

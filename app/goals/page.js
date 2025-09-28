@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -23,12 +23,19 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   EmojiEvents as TrophyIcon,
-  TrendingUp as TrendingUpIcon,
   Edit as EditIcon
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  sanitizeGoalData,
+  sanitizeString,
+  sanitizeNumber,
+  checkRateLimit,
+  sanitizeErrorForLogging
+} from '@/lib/security';
+import { logError } from '@/lib/errorLogger';
 
 const modalStyle = {
   position: 'absolute',
@@ -58,14 +65,37 @@ export default function GoalsPage() {
     unit: '',
     category: 'Strength'
   });
+  const [showTemplates, setShowTemplates] = useState(true);
 
   const goalCategories = ['Strength', 'Endurance', 'Weight Loss', 'Muscle Gain', 'General Fitness'];
 
-  useEffect(() => {
-    fetchGoals();
-  }, []);
+  const goalTemplates = {
+    'Strength': [
+      { name: 'Bench Press 100kg', target: 100, unit: 'kg', description: 'Achieve a 100kg bench press' },
+      { name: 'Squat 140kg', target: 140, unit: 'kg', description: 'Achieve a 140kg squat' },
+      { name: 'Deadlift 180kg', target: 180, unit: 'kg', description: 'Achieve a 180kg deadlift' },
+      { name: 'Pull-ups 20 reps', target: 20, unit: 'reps', description: 'Perform 20 consecutive pull-ups' }
+    ],
+    'Endurance': [
+      { name: '5K Run under 25min', target: 25, unit: 'minutes', description: 'Complete 5km run in under 25 minutes' },
+      { name: 'Plank 5 minutes', target: 5, unit: 'minutes', description: 'Hold plank position for 5 minutes' },
+      { name: '100 Push-ups', target: 100, unit: 'reps', description: 'Perform 100 push-ups in one session' }
+    ],
+    'Weight Loss': [
+      { name: 'Lose 5kg', target: 5, unit: 'kg lost', description: 'Lose 5kg of body weight' },
+      { name: 'Body Fat 15%', target: 15, unit: '% body fat', description: 'Achieve 15% body fat percentage' }
+    ],
+    'Muscle Gain': [
+      { name: 'Gain 5kg muscle', target: 5, unit: 'kg gained', description: 'Gain 5kg of lean muscle mass' },
+      { name: 'Weight 80kg', target: 80, unit: 'kg', description: 'Reach 80kg body weight' }
+    ],
+    'General Fitness': [
+      { name: 'Workout 4x per week', target: 4, unit: 'workouts/week', description: 'Complete 4 workouts every week' },
+      { name: '30 workout streak', target: 30, unit: 'days', description: 'Workout for 30 consecutive days' }
+    ]
+  };
 
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'goals'));
       const goalsData = [];
@@ -77,7 +107,11 @@ export default function GoalsPage() {
       console.error('Error fetching goals:', error);
       showSnackbar('Error fetching goals', 'error');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchGoals();
+  }, [fetchGoals]);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -91,6 +125,7 @@ export default function GoalsPage() {
     if (goal) {
       setEditingGoal(goal);
       setNewGoal(goal);
+      setShowTemplates(false);
     } else {
       setEditingGoal(null);
       setNewGoal({
@@ -101,13 +136,27 @@ export default function GoalsPage() {
         unit: '',
         category: 'Strength'
       });
+      setShowTemplates(true);
     }
     setModalOpen(true);
+  };
+
+  const applyTemplate = (template) => {
+    setNewGoal({
+      name: template.name,
+      description: template.description,
+      target: template.target.toString(),
+      current: '0',
+      unit: template.unit,
+      category: newGoal.category
+    });
+    setShowTemplates(false);
   };
 
   const handleCloseModal = () => {
     setModalOpen(false);
     setEditingGoal(null);
+    setShowTemplates(true);
     setNewGoal({
       name: '',
       description: '',
@@ -119,6 +168,21 @@ export default function GoalsPage() {
   };
 
   const handleInputChange = (field, value) => {
+    // Apply input constraints during typing
+    if (field === 'name' && typeof value === 'string') {
+      value = value.slice(0, 100); // Limit name length
+    } else if (field === 'description' && typeof value === 'string') {
+      value = value.slice(0, 500); // Limit description length
+    } else if (field === 'unit' && typeof value === 'string') {
+      value = value.slice(0, 50); // Limit unit length
+    } else if ((field === 'target' || field === 'current') && value !== '') {
+      // Ensure numeric values are within bounds
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        value = Math.min(Math.max(numValue, 0), 10000);
+      }
+    }
+
     setNewGoal({ ...newGoal, [field]: value });
   };
 
@@ -356,7 +420,7 @@ export default function GoalsPage() {
               letterSpacing: 2
             }}
           >
-            🎯 CONQUEST GOALS
+            🎯 GOALS
           </Typography>
           <Button
             variant="contained"
@@ -404,11 +468,89 @@ export default function GoalsPage() {
 
       {/* Goal Creation/Edit Modal */}
       <Modal open={modalOpen} onClose={handleCloseModal}>
-        <Box sx={modalStyle}>
+        <Box sx={{
+          ...modalStyle,
+          width: { xs: '95vw', sm: 600 },
+          maxWidth: '600px'
+        }}>
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textTransform: 'uppercase' }}>
-            {editingGoal ? 'Edit Goal' : 'Set New Goal'}
+            {editingGoal ? 'Edit Goal' : 'Set New Goal'} 🎯
           </Typography>
 
+          {/* Goal Templates */}
+          {showTemplates && !editingGoal && (
+            <Box sx={{ mb: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                  ⚡ Quick Goal Templates
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => setShowTemplates(false)}
+                  sx={{ color: 'text.secondary' }}
+                >
+                  Skip Templates
+                </Button>
+              </Box>
+
+              {/* Category Tabs */}
+              <Box sx={{ mb: 2 }}>
+                <Grid container spacing={1}>
+                  {goalCategories.map((category) => (
+                    <Grid item xs={6} sm={4} md={2.4} key={category}>
+                      <Button
+                        variant={newGoal.category === category ? 'contained' : 'outlined'}
+                        onClick={() => setNewGoal(prev => ({ ...prev, category }))}
+                        size="small"
+                        fullWidth
+                        sx={{
+                          fontSize: '0.75rem',
+                          py: 0.5,
+                          textTransform: 'none'
+                        }}
+                      >
+                        {category}
+                      </Button>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+
+              {/* Template Grid */}
+              <Box sx={{ maxHeight: '300px', overflow: 'auto', mb: 3 }}>
+                <Grid container spacing={1}>
+                  {goalTemplates[newGoal.category]?.map((template, index) => (
+                    <Grid item xs={12} sm={6} key={index}>
+                      <Card
+                        sx={{
+                          cursor: 'pointer',
+                          background: 'rgba(26, 26, 26, 0.8)',
+                          border: '1px solid #333',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            background: 'rgba(255, 68, 68, 0.05)'
+                          },
+                          transition: 'all 0.2s'
+                        }}
+                        onClick={() => applyTemplate(template)}
+                      >
+                        <CardContent sx={{ p: 2 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                            {template.name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                            Target: {template.target} {template.unit}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            </Box>
+          )}
+
+          {/* Manual Goal Form */}
           <TextField
             fullWidth
             label="Goal Name"
@@ -509,7 +651,7 @@ export default function GoalsPage() {
                 label="Unit"
                 value={newGoal.unit}
                 onChange={(e) => handleInputChange('unit', e.target.value)}
-                placeholder="lbs, reps, minutes..."
+                placeholder="kg, reps, minutes..."
                 required
                 sx={{
                   '& .MuiOutlinedInput-root': {

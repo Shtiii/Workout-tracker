@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -20,35 +20,7 @@ export default function PersonalBestsPage() {
   const [personalBests, setPersonalBests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPersonalBests();
-  }, []);
-
-  const fetchPersonalBests = async () => {
-    try {
-      setLoading(true);
-      const querySnapshot = await getDocs(collection(db, 'workoutSessions'));
-      const workoutSessions = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        workoutSessions.push({
-          id: doc.id,
-          ...data,
-          completedAt: data.completedAt?.toDate() || new Date()
-        });
-      });
-
-      const bests = processPersonalBests(workoutSessions);
-      setPersonalBests(bests);
-    } catch (error) {
-      console.error('Error fetching workout sessions:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const processPersonalBests = (sessions) => {
+  const processPersonalBests = useCallback((sessions) => {
     const exerciseBests = {};
 
     sessions.forEach((session) => {
@@ -77,7 +49,36 @@ export default function PersonalBestsPage() {
     });
 
     return Object.values(exerciseBests).sort((a, b) => b.oneRepMax - a.oneRepMax);
-  };
+  }, []);
+
+  const fetchPersonalBests = useCallback(async () => {
+    try {
+      setLoading(true);
+      const querySnapshot = await getDocs(collection(db, 'workoutSessions'));
+      const workoutSessions = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        workoutSessions.push({
+          id: doc.id,
+          ...data,
+          completedAt: data.completedAt?.toDate() || new Date()
+        });
+      });
+
+      const bests = processPersonalBests(workoutSessions);
+      setPersonalBests(bests);
+    } catch (error) {
+      console.error('Error fetching workout sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [processPersonalBests]);
+
+  useEffect(() => {
+    fetchPersonalBests();
+  }, [fetchPersonalBests]);
+
 
   const calculateOneRepMax = (weight, reps) => {
     if (reps === 1) return weight;
@@ -272,7 +273,7 @@ export default function PersonalBestsPage() {
                             mb: 1
                           }}
                         >
-                          {best.weight} lbs
+                          {best.weight} kg
                         </Typography>
 
                         <Typography

@@ -1,19 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx create-next-app:*)",
-      "Bash(printf \"\\n\\n\")",
-      "Bash(yes '')",
-      "Bash(npm install:*)",
+      "Bash(npm run lint)",
       "Bash(npm run build:*)",
-      "Bash(git init:*)",
-      "Bash(git remote add:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run dev:*)",
       "Bash(git push:*)",
-      "Bash(npx next lint:*)",
-      "Bash(npm start)",
-      "Bash(npm run dev:*)"
+      "Bash(dir:*)",
+      "Bash(del icon-192x192.png)",
+      "Bash(del create-icons.js)",
+      "Bash(where magick)",
+      "Bash(start generate-icons.html)",
+      "Bash(node:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git reset:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(taskkill:*)",
+      "Bash(del nul)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,10 +1,9 @@
 'use client';
 
-import type { Metadata } from "next";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Box, Paper, BottomNavigation, BottomNavigationAction } from '@mui/material';
-import { FitnessCenter as FitnessCenterIcon, ViewList as ViewListIcon, Analytics as AnalyticsIcon, EmojiEvents as EmojiEventsIcon, Dashboard as DashboardIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
+import { FitnessCenter as FitnessCenterIcon, EmojiEvents as EmojiEventsIcon, CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import ThemeRegistry from './theme/ThemeRegistry';
 import "./globals.css";
@@ -18,14 +17,24 @@ export default function RootLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Memoize navigation routes to prevent recreation on every render
+  // Register service worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    }
+  }, []);
+
+  // Memoize navigation routes to prevent recreation on every render - Streamlined for mobile
   const navigationRoutes = useMemo(() => [
-    { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
     { path: '/workout', label: 'Train', icon: <FitnessCenterIcon /> },
-    { path: '/programs', label: 'Programs', icon: <ViewListIcon /> },
-    { path: '/analytics', label: 'Analytics', icon: <CalendarIcon /> },
-    { path: '/goals', label: 'Goals', icon: <EmojiEventsIcon /> },
-    { path: '/bests', label: 'PRs', icon: <EmojiEventsIcon /> }
+    { path: '/analytics', label: 'Progress', icon: <CalendarIcon /> },
+    { path: '/goals-records', label: 'Records', icon: <EmojiEventsIcon /> }
   ], []);
 
   useEffect(() => {
@@ -44,10 +53,12 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#ff4444" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <link rel="apple-touch-icon" href="/workout-icon-192.svg" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
         <ThemeRegistry>
@@ -81,8 +92,8 @@ export default function RootLayout({
                 bottom: 0,
                 left: 0,
                 right: 0,
-                bgcolor: 'rgba(26, 26, 26, 0.95)',
-                backdropFilter: 'blur(10px)',
+                bgcolor: 'rgba(26, 26, 26, 0.7)',
+                backdropFilter: 'blur(20px)',
                 borderTop: '1px solid #333',
                 // iPhone safe area handling
                 paddingBottom: 'env(safe-area-inset-bottom)',
