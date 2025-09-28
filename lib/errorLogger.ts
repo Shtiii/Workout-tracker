@@ -480,3 +480,4 @@ export async function logSyncError(
 }
 
 export default ErrorLogger;
+

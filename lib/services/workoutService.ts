@@ -399,3 +399,4 @@ export class WorkoutService {
 export function getWorkoutService(): WorkoutService {
   return WorkoutService.getInstance();
 }
+

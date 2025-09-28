@@ -96,3 +96,4 @@ describe('LoadingSpinner', () => {
     expect(spinner).toBeInTheDocument()
   })
 })
+

@@ -164,3 +164,4 @@ export default function HistoryView({ allWorkouts, onDeleteWorkout }: HistoryVie
     </Paper>
   );
 }
+

@@ -372,3 +372,4 @@ export function setupServiceWorkerListeners(): void {
 }
 
 export default ServiceWorkerManager;
+

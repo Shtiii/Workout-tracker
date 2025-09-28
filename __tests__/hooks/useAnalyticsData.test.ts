@@ -586,3 +586,4 @@ describe('useExerciseProgressCharts', () => {
     expect(result.current).toEqual([])
   })
 })
+

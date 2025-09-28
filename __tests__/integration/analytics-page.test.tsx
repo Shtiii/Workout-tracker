@@ -405,3 +405,4 @@ describe('Analytics Page Integration', () => {
     expect(screen.getByText('Workouts: 0')).toBeInTheDocument()
   })
 })
+

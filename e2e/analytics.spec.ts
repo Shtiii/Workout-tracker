@@ -267,3 +267,4 @@ test.describe('Analytics Page E2E', () => {
     await expect(page.getByText('STRENGTH PROGRESSION')).toBeVisible()
   })
 })
+

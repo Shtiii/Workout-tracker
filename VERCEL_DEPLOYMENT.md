@@ -244,3 +244,5 @@ ENCRYPTION_KEY_RESTRICTED
 ---
 
 **Note**: This deployment uses Vercel for hosting and Firebase for backend services. The application will automatically deploy on every Git push.
+
+

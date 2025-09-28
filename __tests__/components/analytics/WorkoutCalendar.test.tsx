@@ -273,3 +273,4 @@ describe('WorkoutCalendar', () => {
     expect(screen.getByText('28')).toBeInTheDocument()
   })
 })
+

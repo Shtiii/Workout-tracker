@@ -153,3 +153,4 @@ export default function ProgressView({
     </Box>
   );
 }
+

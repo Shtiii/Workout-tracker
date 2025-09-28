@@ -556,3 +556,4 @@ export default function AdvancedCharts({
     </Box>
   );
 }
+

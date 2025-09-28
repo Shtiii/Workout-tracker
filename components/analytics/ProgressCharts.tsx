@@ -133,3 +133,4 @@ export default function ProgressCharts({ chartData }: ProgressChartsProps) {
     </Paper>
   );
 }
+
